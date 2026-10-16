@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { ConfigSummary, StatusRow } from 'mongo-migrate-kit';
+import type { StatusRow } from 'mongo-migrate-kit';
 import {
   type JsonOutput,
   MmkCommandError,
@@ -7,9 +7,11 @@ import {
   type RunOptions,
   describeCommand,
   runMmkJson,
+  runNodeJson,
 } from './cli.js';
-import { type Wire, parseConfigSummary, parseStatusRows } from './contract.js';
+import { type ProjectConfig, type Wire, parseStatusRows } from './contract.js';
 import type { Logger } from './log.js';
+import { type ConfigReaders, readProjectConfig } from './project-config.js';
 import type { ProjectState } from './project.js';
 
 /** Why the last read of a project failed. `message` is mmk's own when mmk reported it */
@@ -24,8 +26,8 @@ export interface ProjectSnapshot {
   dir: string;
   /** Whether mmk can run here, and if not, why */
   state: ProjectState;
-  /** `mmk config --json`, once read */
-  config: Wire<ConfigSummary> | null;
+  /** The resolved config (see `readProjectConfig`), once read */
+  config: ProjectConfig | null;
   /** `mmk status --json` from the last successful read; null before one, or after a failure */
   rows: Wire<StatusRow>[] | null;
   /** The last read's failure, or null */
@@ -55,7 +57,10 @@ export type RunMmk = (
 /** Options for {@link MmkStore} */
 export interface StoreOptions {
   log: Logger;
+  /** Runs `mmk <args> --json`. Default: the real mmk */
   run?: RunMmk;
+  /** Runs Node with a script (the config bridge for mmk 1.5). Default: the real Node */
+  runNode?: ConfigReaders['library'];
   /** How long a config read may take. Default: 30 s */
   configTimeoutMs?: number;
   /** How long a status read may take. Default: 60 s */
@@ -90,6 +95,7 @@ export class MmkStore {
   private readonly entries = new Map<string, Entry>();
   private readonly listeners = new Set<() => void>();
   private readonly runMmk: RunMmk;
+  private readonly readers: ConfigReaders;
   private readonly log: Logger;
   private readonly configTimeoutMs: number;
   private readonly statusTimeoutMs: number;
@@ -98,6 +104,7 @@ export class MmkStore {
   constructor(options: StoreOptions) {
     this.log = options.log;
     this.runMmk = options.run ?? runMmkJson;
+    this.readers = { cli: this.runMmk, library: options.runNode ?? runNodeJson };
     this.configTimeoutMs = options.configTimeoutMs ?? 30_000;
     this.statusTimeoutMs = options.statusTimeoutMs ?? 60_000;
     this.debounceMs = options.debounceMs ?? 300;
@@ -300,12 +307,19 @@ export class MmkStore {
     try {
       if (entry.configStale || !entry.snapshot.config) {
         this.log.debug(`$ mmk config --json    (in ${entry.snapshot.dir})`);
-        const output = await this.runMmk(state.invocation, ['config'], {
-          timeoutMs: this.configTimeoutMs,
-          onStderrLine: debugLines,
-        });
+        const { config, via } = await readProjectConfig(
+          state.invocation,
+          state.install.packageDir,
+          { timeoutMs: this.configTimeoutMs, onStderrLine: debugLines },
+          this.readers,
+        );
+        if (via === 'library') {
+          this.log.debug(
+            "  This mmk has no `config` command, so the config came from mongo-migrate-kit's resolveConfig()",
+          );
+        }
         entry.configStale = false;
-        this.update(entry, { config: parseConfigSummary(output.value) });
+        this.update(entry, { config });
       }
       this.log.debug(`$ mmk status --json    (in ${entry.snapshot.dir})`);
       const output = await this.runMmk(state.invocation, ['status'], {

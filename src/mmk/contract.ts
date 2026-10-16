@@ -1,7 +1,7 @@
 import type {
-  ConfigSummary,
   LockInfo,
   MigrationExtension,
+  MmkConfig,
   MmkErrorCode,
   RunResult,
   RunResultStatus,
@@ -108,9 +108,41 @@ export function parseUnlockResult(value: unknown): UnlockResult {
   return { released: result.released, holder };
 }
 
-/** Parse the output of `mmk config --json` */
-export function parseConfigSummary(value: unknown): Wire<ConfigSummary> {
-  return checkFields<Wire<ConfigSummary>>('config', 'the output', value, CONFIG_SUMMARY_RULES);
+/**
+ * The resolved config values the extension reads. mongo-migrate-kit 1.5 exports no type for
+ * them (a later release adds `ConfigSummary` with `mmk config --json`, request R2), so this is
+ * declared here, taking each mirrored field's type from `MmkConfig`. It is the subset of R2's
+ * `ConfigSummary` the extension needs, and both ways of reading config produce it.
+ */
+export interface ProjectConfig {
+  /** Absolute path of the migrations folder, resolved the way every mmk command resolves it */
+  migrationsDir: string;
+  fileExtensions: MmkConfig['fileExtensions'];
+  createExtension: MmkConfig['createExtension'];
+  sequential: MmkConfig['sequential'];
+  /** Absent for the default namespace */
+  namespace?: string;
+  /** The database name; null when none is set */
+  dbName: string | null;
+  /** The connection string with its credentials hidden; null when none is set */
+  uri: string | null;
+}
+
+/**
+ * Parse the resolved config, from `mmk config --json` or from the library bridge (same shape).
+ * Fields the extension doesn't read are ignored.
+ */
+export function parseProjectConfig(value: unknown, command: string): ProjectConfig {
+  const parsed = checkFields<ProjectConfig>(command, 'the output', value, PROJECT_CONFIG_RULES);
+  return {
+    migrationsDir: parsed.migrationsDir,
+    fileExtensions: [...parsed.fileExtensions],
+    createExtension: parsed.createExtension,
+    sequential: parsed.sequential,
+    ...(parsed.namespace !== undefined ? { namespace: parsed.namespace } : {}),
+    dbName: parsed.dbName,
+    uri: parsed.uri,
+  };
 }
 
 /**
@@ -230,25 +262,15 @@ const MIGRATION_EXTENSIONS: Record<MigrationExtension, true> = { js: true, ts: t
 const isStringArray = (value: unknown): boolean =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
 
-const CONFIG_SUMMARY_RULES = {
-  configFile: required(nullable(isString), 'a string or null'),
+const PROJECT_CONFIG_RULES = {
   migrationsDir: required(isString, 'a string'),
   fileExtensions: required(isStringArray, 'an array of strings'),
   createExtension: required(oneOf(Object.keys(MIGRATION_EXTENSIONS)), '"js" or "ts"'),
   sequential: required(isBoolean, 'true or false'),
-  migrationsCollection: required(isString, 'a string'),
-  lockCollection: required(isString, 'a string'),
-  lockTTLSeconds: required(isNumber, 'a number'),
-  strict: required(isBoolean, 'true or false'),
-  useTransaction: required(isBoolean, 'true or false'),
-  requireAuthor: required(isBoolean, 'true or false'),
   namespace: optional(isString, 'a string'),
-  author: optional(isString, 'a string'),
-  templatePath: optional(isString, 'a string'),
   dbName: required(nullable(isString), 'a string or null'),
   uri: required(nullable(isString), 'a string or null'),
-  sources: required(isRecord, 'an object'),
-} satisfies Record<keyof ConfigSummary, FieldRule>;
+} satisfies Record<keyof ProjectConfig, FieldRule>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

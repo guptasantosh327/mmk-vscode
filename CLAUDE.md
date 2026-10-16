@@ -10,12 +10,11 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** **Phase 2 (Local workflow)** built on branch `feat/local-workflow`, green
-  locally against the R2 build of mmk (unit 182, contract 31, integration 8). **Blocked on the R2
-  release**: it calls `mmk config --json`, which 1.5.0 lacks, so the branch's CI stays red and it
-  can't merge until mmk ships R2. Then: bump the devDependency **and** `MIN_MMK_VERSION` to that
-  release (the manifest test makes the "too old" welcome text follow), run every suite, merge,
-  and publish 0.1.0 as a pre-release. Phase 1 completed 2026-10-17.
+- **Current phase:** **Phase 2 (Local workflow)** built and green on the pinned mmk 1.5.0 (unit
+  190, contract 33, integration 8). It needs no mmk release: with 1.5.0 the config comes from the
+  project's own `MigratorKit.resolveConfig()` (the config bridge, rule 1), and `mmk config --json`
+  takes over automatically on an mmk that has it (R2). Left for its exit criteria: the 0.1.0
+  pre-release on both marketplaces (the owner publishes). Phase 1 completed 2026-10-17.
 - **Developing against unreleased mmk:** build MMK_REPO's branch (`npm run build` there), then
   `npm install --no-save ../mongo-migrate-kit` here. `npm ci` puts the pinned version back.
 - **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
@@ -82,6 +81,12 @@ session.
        (`test/contract/config-and-naming.contract.test.ts`).
    - Display-only parsing is fine and decides nothing: reading the date out of a
      `YYYYMMDDHHmmss-` file name, or the host out of mmk's masked URI.
+   - **The config bridge** (`src/mmk/project-config.ts`): an mmk without `mmk config --json`
+     (1.5 and earlier) is asked through its public library API instead,
+     `new MigratorKit({ logger: null }).resolveConfig()`, in a child process on the user's Node,
+     loading the project's own mongo-migrate-kit. mmk still resolves everything; nothing is
+     re-implemented, and every reason for running the CLI (§3) still holds. Use the bridge only
+     for what no command of the supported mmk versions outputs, and add an `R<k>` for it as well.
 2. **Never copy types.** Import them: `import type { StatusRow, RunResult, MmkErrorCode, LockInfo }
    from 'mongo-migrate-kit'` (a pinned devDependency, types only, never bundled). On the wire, `Date`
    fields are ISO strings, so wrap them with the `Wire<T>` mapped type in `src/mmk/contract.ts`.
@@ -178,6 +183,7 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── compat.ts            # MIN_MMK_VERSION + version check
 │   │   ├── format.ts            # plain-text status table for the output channel
 │   │   ├── store.ts             # MmkStore: each project's config + status, coalesced reads, runs
+│   │   ├── project-config.ts    # resolved config: mmk config --json, or the 1.5 resolveConfig() bridge
 │   │   ├── model.ts             # sidebar groups from StatusRow[], date/duration labels
 │   │   ├── naming.ts            # create preview (mirrors mmk's slugify) + display names
 │   │   ├── migration-functions.ts # where up()/down() are, for run links

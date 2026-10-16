@@ -12,7 +12,7 @@ ID from `docs/MMK-REQUESTS.md`. A phase can't finish until its requests are **re
 | Phase | What ships | Screens | Needs from mmk |
 |---|---|---|---|
 | 1 | Foundation: scaffold, running mmk, contract tests | — | R1 (optional) |
-| 2 | Local workflow (first pre-release) | A1, A2, A3 | R2; R9, R10 (optional) |
+| 2 | Local workflow (first pre-release) | A1, A2, A3 | R2, R9, R10 (all optional) |
 | 3 | Environments + matrix | C1, C2 | R3, R4 (optional) |
 | 4 | Applied-file protection | B1, B2 | R5 |
 | 5 | Rollback tests + lint | A4 | R6, R7 |
@@ -86,8 +86,11 @@ running `mmk status` in a terminal, and every test suite is green in CI.
 **Goal:** create, run and roll back migrations on the local database without opening a terminal.
 Design screens **A1, A2, A3**.
 
-**Needs from mmk:** **R2** (`mmk config --json`). The extension needs the resolved migrations
-folder and file extensions, and must not re-implement config loading to get them.
+**Needs from mmk:** nothing that isn't released. The extension needs the resolved migrations
+folder and file extensions, and must not re-implement config loading to get them. **R2**
+(`mmk config --json`) is the clean answer and is used when the project's mmk has it. Until then,
+the config bridge asks mmk 1.5's public `MigratorKit.resolveConfig()` (CLAUDE.md rule 1), so
+Phase 2 works with the mmk users already have.
 Optional: **R9** (stdout holds only the JSON document; the parser already copes with a
 migration's `console.log`, so this doesn't block) and **R10** (results of the files that ran
 before a failure, for A3).
@@ -118,11 +121,14 @@ before a failure, for A3).
 create → run up → applied in tree → run down in the fixture workspace with mongodb-memory-server;
 a test that the modal confirmation is required for down.
 
-*Built as (branch `feat/local-workflow`):*
-- `MmkStore` (`src/mmk/store.ts`) holds each project's `mmk config --json` and `status --json`.
+*Built as:*
+- `MmkStore` (`src/mmk/store.ts`) holds each project's resolved config and `status --json`.
   Reads are coalesced and debounced, commands run one at a time per project, and every command
   is followed by a read. Background reads log at debug level; commands log `$ mmk …` and mmk's
   output at info.
+- The config comes from `mmk config --json` when the project's mmk has it, and otherwise from
+  the config bridge: mmk 1.5's own `MigratorKit.resolveConfig()`, run in a child process on the
+  user's Node (`src/mmk/project-config.ts`). Contract tests prove the bridge on the pinned 1.5.0.
 - The create preview mirrors mmk's `slugify`, the second documented exception in CLAUDE.md rule 1,
   with a contract test against the real `mmk create`.
 - Sidebar dates come from `YYYYMMDDHHmmss-` file names (display only). Three batches show, and

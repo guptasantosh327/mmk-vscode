@@ -98,17 +98,40 @@ export async function runMmkJson(
 ): Promise<JsonOutput> {
   const fullArgs = args.includes('--json') ? [...args] : [...args, '--json'];
   const raw = await execMmk(invocation, fullArgs, options);
+  return toJsonOutput(raw, fullArgs, describeCommand(fullArgs));
+}
+
+/**
+ * Run Node.js itself with `nodeArgs` in the project directory (for a script that uses the
+ * project's own mongo-migrate-kit) and parse the one JSON document it prints, which follows
+ * mmk's conventions, including its error document. `label` names it in messages.
+ *
+ * @throws {@link MmkCommandError} when the script prints an error document
+ * @throws {@link MmkProcessError} when Node can't start, times out, or prints no JSON
+ */
+export async function runNodeJson(
+  invocation: MmkInvocation,
+  nodeArgs: readonly string[],
+  label: string,
+  options: RunOptions = {},
+): Promise<JsonOutput> {
+  const raw = await execNode(invocation, nodeArgs, options, label);
+  return toJsonOutput(raw, [label], label);
+}
+
+/** Parse a run's stdout as one JSON document, throwing mmk's error document as an error */
+function toJsonOutput(raw: RawOutput, args: readonly string[], command: string): JsonOutput {
   const parsed = parseJsonStdout(raw.stdout);
   if (!parsed) {
     throw new MmkProcessError(
       'bad-output',
-      `${describeCommand(fullArgs)} exited with code ${raw.exitCode} without printing JSON.${lastLines(raw.stderr)}`,
+      `${command} exited with code ${raw.exitCode} without printing JSON.${lastLines(raw.stderr)}`,
       raw.stderr,
     );
   }
   const failure = parseErrorDocument(parsed.value);
   if (failure) {
-    throw new MmkCommandError(failure, fullArgs, raw.exitCode, raw.stderr);
+    throw new MmkCommandError(failure, args, raw.exitCode, raw.stderr);
   }
   return {
     value: parsed.value,
@@ -199,13 +222,21 @@ function execMmk(
   options: RunOptions,
 ): Promise<RawOutput> {
   assertSafeArguments(args);
-  const command = describeCommand(args);
+  return execNode(invocation, [invocation.script, ...args], options, describeCommand(args));
+}
 
+/** Run Node.js with `nodeArgs` in the project directory and collect its output */
+function execNode(
+  invocation: MmkInvocation,
+  nodeArgs: readonly string[],
+  options: RunOptions,
+  command: string,
+): Promise<RawOutput> {
   return new Promise((resolve, reject) => {
     const lines = options.onStderrLine ? lineSplitter(options.onStderrLine) : undefined;
     const child = execFile(
       invocation.nodePath,
-      [invocation.script, ...args],
+      [...nodeArgs],
       {
         cwd: invocation.cwd,
         env: { ...process.env, ...options.env, FORCE_COLOR: '0', NO_COLOR: '1' },

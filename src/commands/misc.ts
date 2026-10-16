@@ -94,7 +94,7 @@ async function selectEnvironment(deps: Deps): Promise<void> {
   const local: vscode.QuickPickItem = {
     label: `$(circle-filled) ${LOCAL}`,
     detail: `${pending} pending · runs allowed · current · from ${
-      first?.config?.configFile ? path.basename(first.config.configFile) : 'your config'
+      first?.state.root.configFile ? path.basename(first.state.root.configFile) : 'your config'
     } and .env`,
   };
   if (first) {

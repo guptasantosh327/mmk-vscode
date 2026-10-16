@@ -2,13 +2,14 @@ import path from 'node:path';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MmkCommandError } from '../../src/mmk/cli.js';
-import { parseConfigSummary, parseCreateResult } from '../../src/mmk/contract.js';
+import { parseCreateResult, parseStatusRows } from '../../src/mmk/contract.js';
 import { previewFileName } from '../../src/mmk/naming.js';
-import { type ContractProject, createProject } from './harness.js';
+import { type ContractProject, FIXTURE_FILES, createProject } from './harness.js';
 
 /**
- * `mmk config --json` (R2), and the one piece of mmk the extension mirrors: the slug in the
- * "Create migration" preview. Run against the real mmk, like every contract test.
+ * How the extension reads a project's resolved config, and the one piece of mmk it mirrors: the
+ * slug in the "Create migration" preview. Run against the real, pinned mmk, like every contract
+ * test.
  */
 
 let mongo: MongoMemoryServer;
@@ -24,43 +25,58 @@ afterAll(async () => {
   await mongo?.stop();
 });
 
-describe('config', () => {
-  it('config: reports the resolved settings, with absolute paths and their sources', async () => {
-    const output = await project.run(['config']);
-    const config = parseConfigSummary(output.value);
+describe('reading the resolved config', () => {
+  it('reads the settings mmk resolves, with an absolute migrations folder', async () => {
+    const { config } = await project.readConfig();
 
     expect(config).toEqual({
-      configFile: path.join(project.dir, 'mmk.config.js'),
       migrationsDir: project.migrationsDir,
       fileExtensions: ['.ts', '.js'],
       createExtension: 'js',
       sequential: false,
-      migrationsCollection: '_mmk_migrations',
-      lockCollection: '_mmk_locks',
-      lockTTLSeconds: 60,
-      strict: false,
-      useTransaction: false,
-      requireAuthor: false,
       dbName: 'contract_config',
       uri: mongo.getUri(),
-      sources: expect.objectContaining({ migrationsDir: 'file', uri: 'env', dbName: 'env' }),
     });
   });
 
-  it('config: hides the password, and never connects', async () => {
-    // Port 9 refuses connections: a command that connected would fail.
-    const output = await project.run(['config'], {
+  it("asks mongo-migrate-kit's resolveConfig(), because mmk 1.5 has no `mmk config` command", async () => {
+    // When a release with `mmk config --json` (R2) is pinned, this becomes 'cli'.
+    expect((await project.readConfig()).via).toBe('library');
+  });
+
+  it('names the folder that status reads and create writes to', async () => {
+    const { config } = await project.readConfig();
+    const rows = parseStatusRows((await project.run(['status'])).value, 'status');
+    const created = parseCreateResult((await project.run(['create', 'same folder', '--js'])).value);
+
+    expect(rows.map((row) => row.file)).toEqual([...FIXTURE_FILES]);
+    expect(path.dirname(created.path)).toBe(config.migrationsDir);
+  });
+
+  it('hides the password, and never connects', async () => {
+    // Port 9 refuses connections: reading the config would fail if it connected.
+    const { config } = await project.readConfig({
       MMK_URI: 'mongodb://alice:s3cret@127.0.0.1:9/app',
     });
-    const config = parseConfigSummary(output.value);
 
     expect(config.uri).toBe('mongodb://***:***@127.0.0.1:9/app');
-    expect(JSON.stringify(output.value) + output.stderr).not.toContain('s3cret');
   });
 
-  it('config: reports a missing connection as null instead of refusing', async () => {
-    const output = await project.run(['config'], { MMK_URI: '', MMK_DB: '' });
-    expect(parseConfigSummary(output.value)).toMatchObject({ uri: null, dbName: null });
+  it("reports a missing connection as mmk does, with mmk's CONFIG_INVALID", async () => {
+    const error = await project.readConfig({ MMK_URI: '', MMK_DB: '' }).then(
+      () => undefined,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toBeInstanceOf(MmkCommandError);
+    const failure = (error as MmkCommandError).failure;
+    expect(failure.code).toBe('CONFIG_INVALID');
+    expect(failure.details?.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'uri' }),
+        expect.objectContaining({ key: 'dbName' }),
+      ]),
+    );
   });
 });
 

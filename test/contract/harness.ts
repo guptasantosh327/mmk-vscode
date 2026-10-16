@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { type JsonOutput, type MmkInvocation, runMmkJson } from '../../src/mmk/cli.js';
 import { locateMmk } from '../../src/mmk/locate.js';
+import { type ReadConfig, readProjectConfig } from '../../src/mmk/project-config.js';
 
 /** The repository root, whose node_modules holds the pinned mongo-migrate-kit */
 export const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -26,9 +27,13 @@ export interface ContractProject {
   dir: string;
   migrationsDir: string;
   invocation: MmkInvocation;
+  /** The pinned mongo-migrate-kit package directory */
+  packageDir: string;
   env: Record<string, string>;
   /** Run `mmk <args> --json` in this project, as the extension does */
   run: (args: readonly string[], env?: Record<string, string>) => Promise<JsonOutput>;
+  /** Read the resolved config the way the extension does (see `readProjectConfig`) */
+  readConfig: (env?: Record<string, string>) => Promise<ReadConfig>;
   /** Add a migration file to this project */
   addMigration: (file: string, source: string) => void;
   cleanup: () => void;
@@ -71,9 +76,15 @@ export async function createProject(
     dir,
     migrationsDir,
     invocation,
+    packageDir: install.packageDir,
     env,
     run: (args, extraEnv = {}) =>
       runMmkJson(invocation, args, { env: { ...env, ...extraEnv }, timeoutMs: 60_000 }),
+    readConfig: (extraEnv = {}) =>
+      readProjectConfig(invocation, install.packageDir, {
+        env: { ...env, ...extraEnv },
+        timeoutMs: 60_000,
+      }),
     addMigration: (file, source) => writeFileSync(path.join(migrationsDir, file), source),
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };

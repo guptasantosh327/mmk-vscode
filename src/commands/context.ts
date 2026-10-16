@@ -1,7 +1,6 @@
 import * as path from 'node:path';
-import type { ConfigSummary } from 'mongo-migrate-kit';
 import * as vscode from 'vscode';
-import type { Wire } from '../mmk/contract.js';
+import type { ProjectConfig } from '../mmk/contract.js';
 import type { Logger } from '../mmk/log.js';
 import type { MigrationRef, MmkStore, ProjectSnapshot } from '../mmk/store.js';
 
@@ -126,7 +125,7 @@ export function relativeDir(dir: string): string {
  * Where records are read from, for display: `localhost:27017/orders_dev`. Built from mmk's
  * resolved config, whose connection string already has its credentials hidden.
  */
-export function databaseLabel(config: Wire<ConfigSummary> | null): string {
+export function databaseLabel(config: ProjectConfig | null): string {
   if (!config?.uri) {
     return 'no connection string set';
   }

@@ -1,8 +1,8 @@
 import * as path from 'node:path';
-import type { ConfigSummary, MigrationExtension } from 'mongo-migrate-kit';
+import type { MigrationExtension } from 'mongo-migrate-kit';
 import * as vscode from 'vscode';
 import { MmkCommandError } from '../mmk/cli.js';
-import { type Wire, parseCreateResult } from '../mmk/contract.js';
+import { type ProjectConfig, parseCreateResult } from '../mmk/contract.js';
 import { previewFileName } from '../mmk/naming.js';
 import { StoreError } from '../mmk/store.js';
 import { type Deps, resolveProject } from './context.js';
@@ -48,7 +48,7 @@ async function createMigration(deps: Deps, args: CreateArgs = {}): Promise<strin
 
   const answer =
     args.name === undefined
-      ? await askName(config)
+      ? await askName(config, project.state.root.configFile)
       : { name: args.name, extension: args.extension ?? config.createExtension };
   if (!answer) {
     return undefined;
@@ -82,13 +82,14 @@ async function createMigration(deps: Deps, args: CreateArgs = {}): Promise<strin
 
 /** The input box from design A1: the name, a preview of the file, and a JS/TS toggle */
 function askName(
-  config: Wire<ConfigSummary>,
+  config: ProjectConfig,
+  configFile: string | null,
 ): Promise<{ name: string; extension: MigrationExtension } | undefined> {
   const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(config.migrationsDir));
   const shownDir = folder
     ? path.relative(folder.uri.fsPath, config.migrationsDir)
     : config.migrationsDir;
-  const configName = config.configFile ? path.basename(config.configFile) : "mmk's defaults";
+  const configName = configFile ? path.basename(configFile) : "mmk's defaults";
 
   return new Promise((resolve) => {
     const input = vscode.window.createInputBox();

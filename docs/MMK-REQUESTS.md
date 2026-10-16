@@ -33,14 +33,20 @@ them instead of declaring them (`src/mmk/contract.ts` declares these three for n
 
 ---
 
-## R2 — Resolved config as JSON · Phase 2 · `in progress`
+## R2 — Resolved config as JSON · Phase 2 (optional) · `in progress`
 
 **Status:** built on mongo-migrate-kit branch `feat/config-json` (commit `d5925d1`, not pushed,
 not released) as `mmk config [--json]`, `MigratorKit.describeConfig()` and the exported
 `ConfigSummary` / `ConfigSource` types. It never connects, hides the URI's credentials, and
-reports `null` for an unset `uri` / `dbName` / `configFile`. The extension's branch
-`feat/local-workflow` uses it and passes every suite against it. When it's released, raise
-`MIN_MMK_VERSION` and the devDependency to that version.
+reports `null` for an unset `uri` / `dbName` / `configFile`.
+
+**No longer blocking:** with mmk 1.5 the extension reads the same values through the config bridge
+(1.5's public `MigratorKit.resolveConfig()`, CLAUDE.md rule 1), and it switches to
+`mmk config --json` on any mmk that has it. What R2 still adds: the config can be read without a
+connection string, it names where each value came from, and the extension needs no library
+call. When it's released, pin that version, import `ConfigSummary` instead of the local
+`ProjectConfig`, and change the contract test that expects `via: 'library'`. Don't raise
+`MIN_MMK_VERSION` for it.
 
 **Why:** the extension needs the resolved migrations folder, file extensions and create defaults.
 Without this it would have to re-implement mmk's config loading (precedence, `.env`, config

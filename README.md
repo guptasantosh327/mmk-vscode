@@ -31,7 +31,7 @@ bundles the MongoDB driver.
 
 - It activates in folders with an `mmk.config.js`, `.ts` or `.json`, or a `package.json` that
   depends on `mongo-migrate-kit`. Monorepos and multi-root workspaces work.
-- It needs a mongo-migrate-kit release with `mmk config` (the release after 1.5.0).
+- It needs mongo-migrate-kit 1.5.0 or later, installed in the project.
 - It only runs in trusted workspaces, because running mmk runs your project's config and
   migrations.
 - No telemetry.
