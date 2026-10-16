@@ -4,6 +4,16 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			// One-shot build for "Run Extension (fixture workspace)": needs no problem-matcher extension.
+			"label": "bundle",
+			"type": "npm",
+			"script": "bundle",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "silent"
+			}
+		},
+		{
             "label": "watch",
             "dependsOn": [
                 "npm: watch:tsc",

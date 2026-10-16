@@ -14,6 +14,7 @@
       "preLaunchTask": "${defaultBuildTask}"
     },
     {
+      // Opens the sample project against a local MongoDB (its own database, mmk_vscode_fixture).
       "name": "Run Extension (fixture workspace)",
       "type": "extensionHost",
       "request": "launch",
@@ -21,8 +22,12 @@
         "--extensionDevelopmentPath=${workspaceFolder}",
         "${workspaceFolder}/test/fixtures/workspace"
       ],
+      "env": {
+        "MMK_URI": "mongodb://127.0.0.1:27017",
+        "MMK_DB": "mmk_vscode_fixture"
+      },
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}"
+      "preLaunchTask": "bundle"
     }
   ]
 }
