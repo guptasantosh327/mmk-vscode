@@ -10,18 +10,25 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** **Phase 1 (Foundation) complete** on 2026-10-17. CI on Ubuntu is green
-  (lint, typecheck, unit 120, contract 23, integration 5). Next: **Phase 2 — Local workflow**,
-  which needs R2 (`mmk config --json`).
+- **Current phase:** **Phase 2 (Local workflow)** built on branch `feat/local-workflow`, green
+  locally against the R2 build of mmk (unit 182, contract 31, integration 8). **Blocked on the R2
+  release**: it calls `mmk config --json`, which 1.5.0 lacks, so the branch's CI stays red and it
+  can't merge until mmk ships R2. Then: bump the devDependency **and** `MIN_MMK_VERSION` to that
+  release (the manifest test makes the "too old" welcome text follow), run every suite, merge,
+  and publish 0.1.0 as a pre-release. Phase 1 completed 2026-10-17.
+- **Developing against unreleased mmk:** build MMK_REPO's branch (`npm run build` there), then
+  `npm install --no-save ../mongo-migrate-kit` here. `npm ci` puts the pinned version back.
 - **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
   santosh-lodha, which can read the repo's CI runs but not push).
 - **mmk version the contract tests pin:** 1.5.0 (= `MIN_MMK_VERSION`; a test keeps them equal)
-- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). R9 and R10 are built on
-  MMK_REPO branch `feat/json-output`, which isn't pushed or released.
+- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not pushed or
+  released: R2 on MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`.
 - **Before the Phase 2 pre-release:** the publisher ID `guptasantosh327` (confirmed) must exist on
   the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
   (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
 - **Commits** carry only the owner's name: no Claude co-author trailer.
+- **Test hooks:** `activate()` returns `MmkTestApi` (store, idle, sidebar text, setConfirm) only
+  in `ExtensionMode.Test`; integration tests use it to answer the modals and read the tree.
 - **Testing gotchas:** a development extension is exempt from Workspace Trust and
   `@vscode/test-electron` always passes `--disable-workspace-trust`, so trust is tested on the
   installed `.vsix` (`test/integration/run-installed.mjs`). Run from a VS Code terminal, the
@@ -65,9 +72,16 @@ session.
    namespaces, config resolution and error messages all come from running the project's
    `mmk <command> --json`. If the extension needs something mmk doesn't output, **do not compute it
    here**: add it to `docs/MMK-REQUESTS.md`, then build it in MMK_REPO (rule 3).
-   - The one documented exception is Phase 4: hashing an **unsaved editor buffer**. It must
-     match `computeChecksum` in `MMK_REPO/src/utils/checksum.ts` exactly (SHA-256 of the file read as
-     UTF-8), and a contract test proves it on the same fixture files.
+   - Two documented exceptions, each mirrored exactly and proven by a contract test against the
+     real mmk:
+     - Phase 4: hashing an **unsaved editor buffer**. It must match `computeChecksum` in
+       `MMK_REPO/src/utils/checksum.ts` (SHA-256 of the file read as UTF-8).
+     - Phase 2: the **"Create migration" preview** mirrors mmk's `slugify` (`src/mmk/naming.ts`)
+       to show the file name before it exists. It's a preview only: mmk names the file, and the
+       extension opens the path `mmk create --json` returns
+       (`test/contract/config-and-naming.contract.test.ts`).
+   - Display-only parsing is fine and decides nothing: reading the date out of a
+     `YYYYMMDDHHmmss-` file name, or the host out of mmk's masked URI.
 2. **Never copy types.** Import them: `import type { StatusRow, RunResult, MmkErrorCode, LockInfo }
    from 'mongo-migrate-kit'` (a pinned devDependency, types only, never bundled). On the wire, `Date`
    fields are ISO strings, so wrap them with the `Wire<T>` mapped type in `src/mmk/contract.ts`.
@@ -163,13 +177,17 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── contract.ts          # Wire<T> over types imported from mongo-migrate-kit + guards
 │   │   ├── compat.ts            # MIN_MMK_VERSION + version check
 │   │   ├── format.ts            # plain-text status table for the output channel
+│   │   ├── store.ts             # MmkStore: each project's config + status, coalesced reads, runs
+│   │   ├── model.ts             # sidebar groups from StatusRow[], date/duration labels
+│   │   ├── naming.ts            # create preview (mirrors mmk's slugify) + display names
+│   │   ├── migration-functions.ts # where up()/down() are, for run links
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
 │   │   ├── environments.ts      # environment model → MMK_URI / MMK_DB env vars (Phase 3)
 │   │   └── redact.ts            # mask credentials in anything logged
 │   ├── git/                     # NO vscode imports
 │   │   ├── applied-version.ts   # find the commit whose SHA-256 matches the record
 │   │   └── ref-files.ts         # copy migrations from origin/main to a temp folder
-│   ├── commands/                # one file per command
+│   ├── commands/                # context.ts (Deps, targets), run.ts, create.ts, misc.ts
 │   ├── views/
 │   │   ├── sidebar.ts           # TreeDataProvider
 │   │   ├── codelens.ts

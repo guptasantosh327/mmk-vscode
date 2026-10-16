@@ -33,7 +33,14 @@ them instead of declaring them (`src/mmk/contract.ts` declares these three for n
 
 ---
 
-## R2 — Resolved config as JSON · Phase 2 · `open`
+## R2 — Resolved config as JSON · Phase 2 · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/config-json` (commit `d5925d1`, not pushed,
+not released) as `mmk config [--json]`, `MigratorKit.describeConfig()` and the exported
+`ConfigSummary` / `ConfigSource` types. It never connects, hides the URI's credentials, and
+reports `null` for an unset `uri` / `dbName` / `configFile`. The extension's branch
+`feat/local-workflow` uses it and passes every suite against it. When it's released, raise
+`MIN_MMK_VERSION` and the devDependency to that version.
 
 **Why:** the extension needs the resolved migrations folder, file extensions and create defaults.
 Without this it would have to re-implement mmk's config loading (precedence, `.env`, config

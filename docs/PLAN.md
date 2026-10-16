@@ -118,6 +118,24 @@ before a failure, for A3).
 create → run up → applied in tree → run down in the fixture workspace with mongodb-memory-server;
 a test that the modal confirmation is required for down.
 
+*Built as (branch `feat/local-workflow`):*
+- `MmkStore` (`src/mmk/store.ts`) holds each project's `mmk config --json` and `status --json`.
+  Reads are coalesced and debounced, commands run one at a time per project, and every command
+  is followed by a read. Background reads log at debug level; commands log `$ mmk …` and mmk's
+  output at info.
+- The create preview mirrors mmk's `slugify`, the second documented exception in CLAUDE.md rule 1,
+  with a contract test against the real `mmk create`.
+- Sidebar dates come from `YYYYMMDDHHmmss-` file names (display only). Three batches show, and
+  the rest fold into "N older batches".
+- No "untrusted workspace" welcome view: VS Code disables the whole extension in Restricted
+  Mode, so none of its views exist there. VS Code's own Restricted Mode banner covers it.
+- The A3 notification leaves out "transaction committed": mmk's run result doesn't say whether
+  a transaction was used, and the extension doesn't guess.
+- `down` on a file mmk reports as edited (`CHECKSUM_MISMATCH`) offers "Roll back anyway…": a
+  second modal, then `down <file> --force --yes`. `LOCK_ALREADY_HELD` offers "Unlock…".
+- Integration tests answer the modals through `MmkTestApi.setConfirm`, which `activate()` returns
+  only in test mode. The workflow tests run in a copy of the fixture under `.vscode-test/`.
+
 **Exit criteria:** the A1 → A2 → A3 flow works end to end. Publish **0.1.0 as a pre-release**
 (`vsce publish --pre-release`, plus `ovsx`).
 
