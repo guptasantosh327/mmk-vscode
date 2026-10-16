@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VS Code · mmk · Create migration</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#1F2024}
+a{color:#7FB6FF}a:hover{color:#A9CCFF}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #4C8DFF;outline-offset:1px}
+.l{display:flex;min-height:20px}
+.n{flex:none;width:56px;padding-right:20px;box-sizing:border-box;text-align:right;color:#8B909A;user-select:none}
+.c{white-space:pre}
+.k{color:#D19AF4}.f{color:#7FB6FF}.s{color:#A8D98A}.m{color:#F5A97F}
+.lens{display:flex;min-height:20px;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:12px;color:#9DA1A9}
+.lens a,.lens button{color:#9DA1A9;text-decoration:none;background:none;border:none;padding:0;font:inherit;cursor:pointer}
+.lens a:hover,.lens button:hover{color:#7FB6FF;text-decoration:underline}
+</style>
+</helmet>
+<div style="position: relative; min-height: 100vh; display: flex; flex-direction: column; background: #1F2024; color: #D4D6DB; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 1.45; overflow: hidden">
+
+<div style="flex: none; height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: #18191D; border-bottom: 1px solid #2C2D33; font-size: 12px; color: #9DA1A9">
+<span style="display: flex; gap: 8px" aria-hidden="true"><span style="width: 12px; height: 12px; border-radius: 999px; background: #FF5F57"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #FEBC2E"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #28C840"></span></span>
+<span style="flex: 1 1 auto; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">20261014170301-index-payments-by-customer.js — billing-api</span>
+<span style="width: 52px"></span>
+</div>
+
+<div style="flex: 1 0 auto; display: flex; flex-wrap: wrap">
+
+<div style="flex: 1 1 340px; display: flex; min-width: 0; background: #19191D; border-right: 1px solid #2C2D33">
+<nav aria-label="Views" style="flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; padding-top: 4px; background: #18191D; border-right: 1px solid #2C2D33">
+<a href="VSDrift.dc.html" aria-label="Explorer" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></a>
+<button type="button" aria-label="Search" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+<button type="button" aria-label="Source control" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 8v8"></path><path d="M18 10c0 4-4 5-10 6"></path></svg></button>
+<a href="VSTest.dc.html" aria-label="Testing" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path><path d="M7.5 15h9"></path></svg></a>
+<a href="VSMain.dc.html" aria-label="mmk" aria-current="page" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #E8EAED; box-shadow: inset 2px 0 0 #4C8DFF"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg></a>
+</nav>
+<section aria-label="mmk migrations" style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding-bottom: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 8px 0 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #9DA1A9">
+<span>MMK: MIGRATIONS</span>
+<span style="display: flex; gap: 2px">
+<a href="VSCreate.dc.html" aria-label="New migration" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: #B9BDC5; border-radius: 5px; background: #2A2C33"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></a>
+<button type="button" aria-label="Refresh" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: #B9BDC5; border-radius: 5px; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 3v6h-6"></path></svg></button>
+</span>
+</div>
+<a href="VSEnv.dc.html" style="margin: 0 12px 10px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #33353C; border-radius: 6px; background: #202127; color: #D4D6DB; text-decoration: none">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: #4CC38A; flex: none"></span>
+<span style="display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto"><span style="font-weight: 600">local</span><span style="font-size: 11px; color: #8B909A; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">localhost:27017/orders_dev</span></span>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+</a>
+<div style="display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 12px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #B9BDC5">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+<span style="flex: 1 1 auto">PENDING ON LOCAL</span>
+<span style="padding: 0 7px; border-radius: 999px; background: #2F3240; color: #C9CDD5">2</span>
+</div>
+<button type="button" style="display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; padding: 0 12px 0 28px; background: transparent; border: none; color: #D4D6DB; font: inherit; font-size: 13px; text-align: left; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6FA8FF" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle></svg><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">add-orders-region-field.js</span><span style="flex: none; font-size: 12px; color: #8B909A">11 Oct</span></button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; padding: 0 12px 0 28px; background: #2A3550; border: none; color: #E8EAED; font: inherit; font-size: 13px; text-align: left; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6FA8FF" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle></svg><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">index-payments-by-customer.js</span><span style="flex: none; font-size: 12px; color: #8B909A">14 Oct</span></button>
+<div style="display: flex; align-items: center; gap: 4px; height: 26px; margin-top: 8px; padding: 0 12px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #B9BDC5">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+<span style="flex: 1 1 auto">APPLIED ON LOCAL</span>
+<span style="padding: 0 7px; border-radius: 999px; background: #2F3240; color: #C9CDD5">42</span>
+</div>
+<button type="button" style="display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 12px 0 22px; background: transparent; border: none; color: #D4D6DB; font: inherit; font-size: 13px; text-align: left; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg><span style="flex: 1 1 auto">Batch 17 · 13 Oct</span><span style="font-size: 12px; color: #8B909A">2</span></button>
+<button type="button" style="display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 12px 0 22px; background: transparent; border: none; color: #D4D6DB; font: inherit; font-size: 13px; text-align: left; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg><span style="flex: 1 1 auto">Batch 16 · 30 Sep</span><span style="font-size: 12px; color: #8B909A">1</span></button>
+<button type="button" style="display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 12px 0 22px; background: transparent; border: none; color: #D4D6DB; font: inherit; font-size: 13px; text-align: left; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg><span style="flex: 1 1 auto">Batch 15 · 15 Sep</span><span style="font-size: 12px; color: #8B909A">2</span></button>
+<button type="button" style="display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 12px 0 22px; background: transparent; border: none; color: #D4D6DB; font: inherit; font-size: 13px; text-align: left; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg><span style="flex: 1 1 auto">14 older batches</span><span style="font-size: 12px; color: #8B909A">37</span></button>
+</section>
+</div>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: #1F2024">
+<div style="flex: none; display: flex; background: #18191D; border-bottom: 1px solid #2C2D33; overflow-x: auto">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; background: #1F2024; color: #E8EAED; border: none; border-top: 2px solid #4C8DFF; border-right: 1px solid #2C2D33; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer"><span style="font-size: 10px; font-weight: 700; color: #E5C07B">JS</span>index-payments-by-customer.js</button>
+</div>
+<div style="flex: none; padding: 4px 16px; font-size: 12px; color: #8B909A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">migrations › 20261014170301-index-payments-by-customer.js</div>
+<div style="flex: 1 1 auto; padding: 10px 0 24px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 20px; overflow-x: auto; opacity: 0.55">
+<div class="l"><span class="n">1</span><span class="c"><span class="k">export const</span> description = <span class="s">'Index payments by customer'</span>;</span></div>
+<div class="l"><span class="n">2</span><span class="c"><span class="k">export const</span> author = <span class="s">'Lena Ortiz &lt;lena@example.com&gt;'</span>;</span></div>
+<div class="l"><span class="n">3</span><span class="c"></span></div>
+<div class="lens"><span class="n"></span><span>Pending on local  |  Run up on local  |  Dry run  |  staging: applied 15 Oct  |  prod: pending</span></div>
+<div class="l"><span class="n">4</span><span class="c"><span class="k">export async function</span> <span class="f">up</span>({ db }) {</span></div>
+<div class="l"><span class="n">5</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'payments'</span>).<span class="f">createIndex</span>(</span></div>
+<div class="l"><span class="n">6</span><span class="c">    { customerId: <span class="m">1</span>, createdAt: <span class="m">-1</span> },</span></div>
+<div class="l"><span class="n">7</span><span class="c">    { name: <span class="s">'payments_by_customer'</span> },</span></div>
+<div class="l"><span class="n">8</span><span class="c">  );</span></div>
+<div class="l"><span class="n">9</span><span class="c">}</span></div>
+<div class="l"><span class="n">10</span><span class="c"></span></div>
+<div class="l"><span class="n">11</span><span class="c"><span class="k">export async function</span> <span class="f">down</span>({ db }) {</span></div>
+<div class="l"><span class="n">12</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'payments'</span>).<span class="f">dropIndex</span>(<span class="s">'customerId_1_createdAt_-1'</span>);</span></div>
+<div class="l"><span class="n">13</span><span class="c">}</span></div>
+</div>
+</div>
+
+</div>
+
+<footer style="flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; min-height: 26px; background: #18191D; border-top: 1px solid #2C2D33; font-size: 12px; color: #9DA1A9">
+<div style="display: flex; align-items: center; gap: 14px; padding: 0 10px">
+<span style="display: inline-flex; align-items: center; gap: 5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 8v8"></path><path d="M18 10c0 4-4 5-10 6"></path></svg>feat/refunds</span>
+<span style="display: inline-flex; align-items: center; gap: 5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg>0<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg>0</span>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; padding-left: 10px">
+<span>JavaScript</span>
+<a href="VSEnv.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; background: #2E5BD8; color: #FFFFFF; text-decoration: none; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg>mmk: local · 2 pending</a>
+</div>
+</footer>
+
+<div role="dialog" aria-label="mmk: Create migration" style="position: absolute; top: 44px; left: 50%; transform: translateX(-50%); width: 640px; max-width: calc(100% - 32px); box-sizing: border-box; background: #25262C; border: 1px solid #3A3C44; border-radius: 8px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); padding: 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #9DA1A9; padding: 0 2px"><span style="font-weight: 600; color: #D4D6DB">mmk: Create migration</span><span>Enter to create · Esc to cancel</span></div>
+<label for="mig-name" style="font-size: 12px; color: #9DA1A9; padding: 0 2px">Migration name</label>
+<input id="mig-name" type="text" autocomplete="off" spellcheck="false" value="{{ name }}" onChange="{{ onName }}" style="height: 34px; box-sizing: border-box; padding: 0 10px; border-radius: 4px; border: 1px solid #4C8DFF; background: #1B1C21; color: #E8EAED; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; width: 100%">
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 6px; background: #1E1F24; font-size: 13px">
+<div style="display: flex; flex-wrap: wrap; gap: 2px 12px"><dt style="flex: 0 0 72px; color: #8B909A">Creates</dt><dd style="flex: 1 1 360px; margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #E8EAED; overflow-wrap: anywhere">{{ path }}</dd></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline"><dt style="flex: 0 0 72px; color: #8B909A">Type</dt><dd style="flex: 1 1 360px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline"><span>{{ lang }}</span><span style="font-size: 12px; color: #8B909A">{{ langNote }}</span><button type="button" onClick="{{ toggleTs }}" style="background: none; border: none; padding: 0; color: #7FB6FF; font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline">{{ toggleLabel }}</button></dd></div>
+<div style="display: flex; flex-wrap: wrap; gap: 2px 12px"><dt style="flex: 0 0 72px; color: #8B909A">Author</dt><dd style="flex: 1 1 360px; margin: 0">Asha Rao &lt;asha@example.com&gt; <span style="font-size: 12px; color: #8B909A">from git config</span></dd></div>
+</dl>
+<div style="display: flex; justify-content: flex-end; gap: 8px">
+<sc-if value="{{ ok }}" hint-placeholder-val="{{ true }}">
+<a href="VSMain.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 4px; background: #2E5BD8; color: #FFFFFF; text-decoration: none; font-size: 13px; font-weight: 600">Create and open</a>
+</sc-if>
+<sc-if value="{{ notOk }}" hint-placeholder-val="{{ false }}">
+<span aria-disabled="true" style="display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 4px; background: #33353C; color: #9DA1A9; font-size: 13px; font-weight: 600">Create and open</span>
+</sc-if>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const name = s.name === undefined ? 'add-refunds-collection' : s.name;
+    const ts = !!s.ts;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const ok = slug.length > 0;
+    return {
+      name: name,
+      onName: (e) => this.setState({ name: e && e.target ? e.target.value : '' }),
+      path: ok ? 'migrations/20261016101502-' + slug + (ts ? '.ts' : '.js') : 'Type a name to see the file it creates',
+      lang: ts ? 'TypeScript' : 'JavaScript',
+      langNote: ts ? 'Runs on Node 22.18+ or with a TypeScript loader' : 'From createExtension in mmk.config.js',
+      toggleLabel: ts ? 'Use JavaScript' : 'Use TypeScript',
+      toggleTs: () => this.setState({ ts: !ts }),
+      ok: ok,
+      notOk: !ok
+    };
+  }
+}
+</script>
+</body>
+</html>

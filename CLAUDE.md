@@ -1,0 +1,259 @@
+# CLAUDE.md — mmk for VS Code
+
+> Read this file **completely** before writing code. It loads every session.
+> The plan is in `docs/PLAN.md`, the design in `design/SCREENS.md`, and the core changes this
+> extension needs from mongo-migrate-kit in `docs/MMK-REQUESTS.md`.
+
+---
+
+## 0. Status & how to resume
+
+> Keep this block short and current. Update it at the end of every phase.
+
+- **Current phase:** Phase 1 (Foundation) done locally on 2026-10-17: lint, typecheck, unit (120),
+  contract (23) and integration (5) are green on macOS. **Not yet seen green in CI**: the repo has
+  no remote yet, so `.github/workflows/ci.yml` has never run. Next: push, confirm CI, then
+  **Phase 2 — Local workflow**.
+- **mmk version the contract tests pin:** 1.5.0 (= `MIN_MMK_VERSION`; a test keeps them equal)
+- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). R9 and R10 were added in Phase 1.
+- **Placeholders to confirm before publishing:** `publisher` (`guptasantosh327`) and `repository`
+  in `package.json`; the extension ID in tests (`test/integration/helpers.ts`,
+  `test/integration/run-installed.mjs`) follows `publisher`.
+- **Testing gotchas:** a development extension is exempt from Workspace Trust and
+  `@vscode/test-electron` always passes `--disable-workspace-trust`, so trust is tested on the
+  installed `.vsix` (`test/integration/run-installed.mjs`). Run from a VS Code terminal, the
+  environment has `ELECTRON_RUN_AS_NODE=1`, which must be removed before launching VS Code.
+- **To resume:** read this file, `docs/PLAN.md` (find the current phase), then the session-start
+  note the hook printed about mongo-migrate-kit. If that repo changed since the last session,
+  check its `CHANGELOG.md` for `--json` changes before continuing.
+
+---
+
+## 1. What this is
+
+A VS Code extension for **mongo-migrate-kit (mmk)**, a MongoDB migration CLI and library. It brings
+mmk into the editor:
+
+- a sidebar of migrations (pending / applied by batch / edited after it ran)
+- run links above `up()` and `down()` for the local database
+- a warning **while typing** when someone edits a migration that has already run
+- a diff against the exact version that ran, found by matching mmk's recorded checksum in git history
+- environments (local / staging / prod) with staging and prod **read-only**, and a files × environments matrix
+- rollback tests (up → down → up on a temporary database) in Test Explorer
+
+It is a **UI over the mmk CLI**. mmk decides every behaviour. This repo only calls mmk and shows
+what it returns.
+
+---
+
+## 2. Source of truth: mongo-migrate-kit (the no-drift rules)
+
+```
+MMK_REPO = /Users/santoshgupta/Desktop/development/mongo-migrate-kit
+```
+
+`.claude/settings.json` gives this repo access to MMK_REPO. Edits there are allowed only under
+rule 3. A SessionStart hook prints MMK_REPO's version, branch and last commits at the start of each
+session.
+
+### The rules
+
+1. **Never re-implement mmk logic.** Status, pending/applied, checksum verdicts, batches, locks,
+   namespaces, config resolution and error messages all come from running the project's
+   `mmk <command> --json`. If the extension needs something mmk doesn't output, **do not compute it
+   here**: add it to `docs/MMK-REQUESTS.md`, then build it in MMK_REPO (rule 3).
+   - The one documented exception is Phase 4: hashing an **unsaved editor buffer**. It must
+     match `computeChecksum` in `MMK_REPO/src/utils/checksum.ts` exactly (SHA-256 of the file read as
+     UTF-8), and a contract test proves it on the same fixture files.
+2. **Never copy types.** Import them: `import type { StatusRow, RunResult, MmkErrorCode, LockInfo }
+   from 'mongo-migrate-kit'` (a pinned devDependency, types only, never bundled). On the wire, `Date`
+   fields are ISO strings, so wrap them with the `Wire<T>` mapped type in `src/mmk/contract.ts`.
+   Never hand-write a type that mmk exports.
+3. **Build what the extension needs in MMK_REPO, the mmk way.** The owner allowed edits to MMK_REPO
+   (2026-10-17) for changes the extension needs. Every such change:
+   - is a request `R<k>` in `docs/MMK-REQUESTS.md` first, and its status line is kept current;
+   - follows MMK_REPO's own `CLAUDE.md` (read §2 and §20 there first): its standards, tests (a shape
+     test for any `--json` output), docs under `docs/`, and a `CHANGELOG.md` entry;
+   - is additive and non-breaking for mmk's CLI, CI and library users, and makes sense for all of
+     them. Behaviour only the extension wants stays in the extension;
+   - goes on its own branch in MMK_REPO (`feat/<topic>` from `main`), never onto a branch holding
+     other work and never straight onto `main`;
+   - is never released by Claude: the version bump, tag and `npm publish` are the owner's step.
+     Until then the extension tests it through `file:../mongo-migrate-kit` (rule 7).
+
+   Nothing else in MMK_REPO is edited from here: no drive-by fixes or refactors.
+4. **Read before you touch.** Before implementing anything that calls mmk, read the relevant source:
+
+   | Working on | Read in MMK_REPO |
+   |---|---|
+   | Anything | `CLAUDE.md` §0 (status), §2 (standards), §13 (CLI) |
+   | Parsing `--json` output | `src/types/index.ts`, `src/cli/shared.ts` (`emitJson`, `withMigrator`), `src/cli/commands/<command>.ts` |
+   | Errors shown to the user | `src/errors/index.ts`, `docs/reference/error-codes.md` |
+   | Connections / environments | `src/core/config.ts` (precedence, `dotenv` with `override: false`), `CLAUDE.md` §7 |
+   | Checksums / edited-file detection | `src/utils/checksum.ts`, `CLAUDE.md` §9, `status()` in `src/core/migrator.ts` |
+   | Namespaces / shared databases | `src/utils/namespace.ts`, `src/core/changelog.ts`, `docs/guide/shared-database.md`, `CLAUDE.md` §0 (namespace entry). `NAMESPACE-PLAN.md` is referenced there but isn't in the repo |
+   | Locks | `src/core/lock.ts`, `CLAUDE.md` §10 |
+   | Where things live | `ARCHITECTURE.md` |
+
+5. **Prove it against the real CLI.** Contract tests run the real `mmk` from the pinned
+   devDependency against `mongodb-memory-server` and assert every JSON field the extension reads.
+   A failing contract test means mmk changed: update `src/mmk/`, **never loosen the test**.
+6. **Check the version at runtime.** `src/mmk/compat.ts` holds `MIN_MMK_VERSION`. On activation,
+   run the project's `mmk --version`. If it's older, show "Update mongo-migrate-kit to X or later"
+   and turn features off. Never guess at an older output shape.
+7. **Testing unreleased mmk changes:** temporarily point the devDependency at
+   `file:../mongo-migrate-kit`. Never commit that.
+
+---
+
+## 3. Architecture
+
+```
+VS Code window  ⇄  extension host (this code, TypeScript)
+                         │ execFile (never a shell)
+                         ▼
+        <project>/node_modules/.bin/mmk <command> --json
+        (the project's own mmk version, its mmk.config.*, the user's Node)
+                         │
+                         ▼
+               MongoDB (local / staging / prod)
+```
+
+**Why run the CLI instead of importing mmk:** the project's mmk version and config (including
+secret-manager config functions) always apply, the MongoDB driver is never bundled, a crashing
+migration can't take down the editor, and `.ts` migrations run on the same Node as the user's
+terminal.
+
+**Layering rule:** `src/mmk/**` and `src/git/**` never import `vscode`, so they can be unit-tested with
+vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing/**` import `vscode`.
+
+---
+
+## 4. Tech stack (locked — ask before adding anything)
+
+| Piece | Choice |
+|---|---|
+| Language | TypeScript, strict (same compiler flags as MMK_REPO `tsconfig.json`) |
+| Scaffold | `npx --package yo --package generator-code -- yo code` (TypeScript, esbuild) |
+| API types | `@types/vscode` + `engines.vscode` |
+| Bundler | esbuild → `dist/extension.js` |
+| Webview UI | plain HTML/CSS with `--vscode-*` theme variables + `@vscode/codicons` (the Webview UI Toolkit is deprecated — don't use it) |
+| Unit tests | vitest (only for code that doesn't import `vscode`) |
+| Integration tests | `@vscode/test-cli` + `@vscode/test-electron` (Mocha), config in `.vscode-test.mjs` |
+| Test database | `mongodb-memory-server` |
+| mmk | `mongo-migrate-kit` as a **pinned devDependency** — for types and contract tests only |
+| Lint / format | biome, with the same settings as MMK_REPO `biome.json` |
+| Publishing | `@vscode/vsce` (VS Code Marketplace) and `ovsx` (Open VSX: Cursor, Windsurf, VSCodium) |
+
+---
+
+## 5. Project structure
+
+```
+├── package.json                 # extension manifest: commands, views, settings, activation
+├── src/
+│   ├── extension.ts             # activate(): wires everything
+│   ├── mmk/                     # NO vscode imports
+│   │   ├── locate.ts            # find project root(s), the installed mmk script, Node
+│   │   ├── project.ts           # discoverProjects(): locate + `mmk --version` + compat per project
+│   │   ├── cli.ts               # run mmk with --json, timeouts, parse { error }
+│   │   ├── contract.ts          # Wire<T> over types imported from mongo-migrate-kit + guards
+│   │   ├── compat.ts            # MIN_MMK_VERSION + version check
+│   │   ├── format.ts            # plain-text status table for the output channel
+│   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
+│   │   ├── environments.ts      # environment model → MMK_URI / MMK_DB env vars (Phase 3)
+│   │   └── redact.ts            # mask credentials in anything logged
+│   ├── git/                     # NO vscode imports
+│   │   ├── applied-version.ts   # find the commit whose SHA-256 matches the record
+│   │   └── ref-files.ts         # copy migrations from origin/main to a temp folder
+│   ├── commands/                # one file per command
+│   ├── views/
+│   │   ├── sidebar.ts           # TreeDataProvider
+│   │   ├── codelens.ts
+│   │   ├── decorations.ts       # Explorer badges
+│   │   ├── diagnostics.ts       # "this migration already ran"
+│   │   ├── statusbar.ts
+│   │   └── matrix/              # webview: panel.ts + media/
+│   └── testing/rollback.ts      # TestController (Phase 5)
+├── test/
+│   ├── unit/                    # vitest
+│   ├── contract/                # real mmk + mongodb-memory-server
+│   ├── integration/             # @vscode/test-cli, plus installed/ + run-installed.mjs (the .vsix)
+│   └── fixtures/                # workspace/ (mmk.config.js + migrations/) and empty/
+├── design/                      # SCREENS.md + screens/*.dc.html (source of the mockups)
+└── docs/                        # PLAN.md, MMK-REQUESTS.md
+```
+
+---
+
+## 6. Engineering standards (mirrors MMK_REPO `CLAUDE.md` §2)
+
+- TypeScript strict, no `any` (use `unknown` and narrow), no `@ts-ignore`, explicit return types on
+  exported functions, JSDoc on every exported function.
+- biome: 100 columns, single quotes, semicolons. Named exports only.
+- Files `kebab-case`, classes `PascalCase`, functions `camelCase`, constants `SCREAMING_SNAKE_CASE`.
+- No `console.log`. Log through the `LogOutputChannel` wrapper, which masks credentials.
+- Messages to the user say what happened, the value involved, and what to do next (the same
+  principle as `MMK_REPO/src/utils/explain.ts`). When mmk returns `{ error: { code, message } }`,
+  **show mmk's message as is**. Don't rewrite it.
+- Run processes with `execFile` and an argument array, never a shell string.
+- Every feature ships with its tests in the same PR. Conventional commits, scoped by module
+  (`cli`, `sidebar`, `codelens`, `env`, `matrix`, `git`, `testing`, `diagnostics`).
+
+---
+
+## 7. Security rules
+
+- **Workspace Trust:** running mmk executes the project's code (its config and migrations), so the
+  manifest declares `capabilities.untrustedWorkspaces.supported: false`.
+- **Remote development:** `extensionKind: ["workspace"]`, so it runs next to `node_modules` and the
+  database network in Remote-SSH, WSL and Dev Containers.
+- **Connection strings** live only in `context.secrets` (the OS keychain). They're passed to mmk as
+  `MMK_URI` / `MMK_DB` environment variables — **never as `--uri`** (arguments are visible in `ps`).
+  They're never written to settings.json or logs. If settings.json contains `mongodb://user:pass@`,
+  warn and offer to move it to the keychain.
+- **Read-only environments** (staging and prod by default) only ever run read commands: `status`,
+  `list`, `dry-run`, `status --all-namespaces`. Write commands are only offered on environments
+  marked writable (by default only `local`).
+
+---
+
+## 8. UX rules (from the design)
+
+- Files always come from the **current branch's working tree**. Records come from the selected
+  database. Every cross-environment view names what it compares ("Files on branch feat/x").
+- The status bar shows the environment: default background for local,
+  `statusBarItem.warningBackground` for staging, `statusBarItem.errorBackground` for prod.
+- Nothing runs automatically. Every write is an explicit click. `down`, `redo` and `--force`
+  confirm in a modal first.
+- Every action can show and copy the equivalent CLI command.
+- Use VS Code theme colors and codicons, not the mockup's hex values (`design/SCREENS.md` maps them).
+
+---
+
+## 9. What NOT to do
+
+- ❌ Compute anything mmk can answer (statuses, verdicts, config, batches) — request it instead
+- ❌ Copy a type that mongo-migrate-kit exports
+- ❌ Edit MMK_REPO for anything but a request in `docs/MMK-REQUESTS.md`, or release mmk (rule 3)
+- ❌ Run a write command against an environment marked read-only
+- ❌ Put a connection string in argv, settings, logs or error messages
+- ❌ Use the deprecated Webview UI Toolkit
+- ❌ Start the next phase before the current phase's exit criteria pass
+- ❌ Loosen a contract test to make it pass
+
+---
+
+## 10. Commands (exist after Phase 1)
+
+```bash
+npm install
+npm run watch              # esbuild in watch mode
+# F5 in VS Code            → Extension Development Host
+npm test                   # vitest unit tests
+npm run test:contract      # real mmk + mongodb-memory-server
+npm run test:integration   # @vscode/test-cli, then the packaged .vsix (Linux CI needs xvfb-run)
+npx biome check src test
+npx tsc --noEmit
+npm run package            # vsce package → .vsix
+```

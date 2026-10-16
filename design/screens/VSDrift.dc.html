@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VS Code · mmk · Editing an applied file</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#1F2024}
+a{color:#7FB6FF}a:hover{color:#A9CCFF}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #4C8DFF;outline-offset:1px}
+.l{display:flex;min-height:20px}
+.n{flex:none;width:56px;padding-right:20px;box-sizing:border-box;text-align:right;color:#8B909A;user-select:none}
+.c{white-space:pre}
+.k{color:#D19AF4}.f{color:#7FB6FF}.s{color:#A8D98A}.m{color:#F5A97F}
+.lens{display:flex;min-height:20px;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:12px;color:#9DA1A9}
+.lens a,.lens button{color:#9DA1A9;text-decoration:none;background:none;border:none;padding:0;font:inherit;cursor:pointer}
+.lens a:hover,.lens button:hover{color:#7FB6FF;text-decoration:underline}
+</style>
+</helmet>
+<div style="position: relative; min-height: 100vh; display: flex; flex-direction: column; background: #1F2024; color: #D4D6DB; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 1.45; overflow: hidden">
+
+<div style="flex: none; height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: #18191D; border-bottom: 1px solid #2C2D33; font-size: 12px; color: #9DA1A9">
+<span style="display: flex; gap: 8px" aria-hidden="true"><span style="width: 12px; height: 12px; border-radius: 999px; background: #FF5F57"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #FEBC2E"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #28C840"></span></span>
+<span style="flex: 1 1 auto; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">● 20260914103012-backfill-invoice-currency.js — billing-api</span>
+<span style="width: 52px"></span>
+</div>
+
+<div style="flex: 1 0 auto; display: flex; flex-wrap: wrap">
+
+<div style="flex: 1 1 340px; display: flex; min-width: 0; background: #19191D; border-right: 1px solid #2C2D33">
+<nav aria-label="Views" style="flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; padding-top: 4px; background: #18191D; border-right: 1px solid #2C2D33">
+<a href="VSDrift.dc.html" aria-label="Explorer" aria-current="page" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #E8EAED; box-shadow: inset 2px 0 0 #4C8DFF"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></a>
+<button type="button" aria-label="Search" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+<button type="button" aria-label="Source control" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 8v8"></path><path d="M18 10c0 4-4 5-10 6"></path></svg></button>
+<a href="VSTest.dc.html" aria-label="Testing" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path><path d="M7.5 15h9"></path></svg></a>
+<a href="VSMain.dc.html" aria-label="mmk" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg></a>
+</nav>
+<section aria-label="Explorer" style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding-bottom: 12px">
+<div style="display: flex; align-items: center; height: 36px; padding: 0 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #9DA1A9">EXPLORER</div>
+<div style="display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 12px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #B9BDC5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>BILLING-API</div>
+<div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px 0 18px; color: #D4D6DB"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>src</div>
+<div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px 0 18px; color: #D4D6DB"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>migrations</div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #D4D6DB">20260903091120-rename-customer-ref.js</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px; background: #2A3550"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #F2C27A">20260914103012-backfill-invoice-currency.js</span><span style="flex: none; font-size: 12px; font-weight: 700; color: #E5C07B" title="Modified (git)">M</span><span style="flex: none; font-size: 12px; font-weight: 700; color: #F2C27A" title="Edited after it ran (mmk)">!</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #D4D6DB">20260929161544-drop-legacy-totals.js</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #D4D6DB">20261006110402-add-payments-ttl-index.js</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #D4D6DB">20261006113518-seed-tax-regions.js</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #A9C3F5">20261011090845-add-orders-region-field.js</span><span style="flex: none; font-size: 12px; font-weight: 700; color: #6FA8FF" title="Pending on local (mmk)">●</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #A9C3F5">20261014170301-index-payments-by-customer.js</span><span style="flex: none; font-size: 12px; font-weight: 700; color: #6FA8FF" title="Pending on local (mmk)">●</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px 0 38px"><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #A8D98A">20261016101502-add-refunds-collection.js</span><span style="flex: none; font-size: 12px; font-weight: 700; color: #A8D98A" title="Untracked (git)">U</span></div>
+<div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px 0 32px; color: #D4D6DB"><span style="font-size: 10px; font-weight: 700; color: #E5C07B">JS</span>mmk.config.js</div>
+<div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px 0 32px; color: #D4D6DB"><span style="font-size: 10px; font-weight: 700; color: #E5C07B">{ }</span>package.json</div>
+<div style="margin: auto 12px 0; padding: 8px 10px; border-radius: 6px; border: 1px solid #33353C; font-size: 12px; color: #9DA1A9; display: flex; flex-direction: column; gap: 4px">
+<span style="font-weight: 600; color: #B9BDC5">mmk badges</span>
+<span><span style="color: #6FA8FF; font-weight: 700">●</span> pending on local</span>
+<span><span style="color: #F2C27A; font-weight: 700">!</span> edited after it ran</span>
+</div>
+</section>
+</div>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: #1F2024">
+<div style="flex: none; display: flex; background: #18191D; border-bottom: 1px solid #2C2D33; overflow-x: auto">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; background: #1F2024; color: #F2C27A; border: none; border-top: 2px solid #4C8DFF; border-right: 1px solid #2C2D33; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer"><span style="font-size: 10px; font-weight: 700; color: #E5C07B">JS</span>backfill-invoice-currency.js<span style="color: #E8EAED" aria-label="unsaved changes">●</span></button>
+</div>
+<div style="flex: none; padding: 4px 16px; font-size: 12px; color: #8B909A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">migrations › 20260914103012-backfill-invoice-currency.js › down</div>
+<div style="flex: 1 1 auto; position: relative; padding: 10px 0 16px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 20px; overflow-x: auto; min-height: 380px">
+<div class="l"><span class="n">1</span><span class="c"><span class="k">export const</span> description = <span class="s">"Backfill currency: 'USD' on old invoices"</span>;</span></div>
+<div class="l"><span class="n">2</span><span class="c"><span class="k">export const</span> author = <span class="s">'Asha Rao &lt;asha@example.com&gt;'</span>;</span></div>
+<div class="l"><span class="n">3</span><span class="c"></span></div>
+<div class="lens"><span class="n"></span><span style="display: flex; flex-wrap: wrap; gap: 0 12px; align-items: center"><span style="display: inline-flex; align-items: center; gap: 5px; color: #F2C27A"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v6"></path><path d="M12 17h.01"></path></svg>Applied on local, staging, prod · edited since</span><span aria-hidden="true">|</span><a href="VSDiff.dc.html" style="color: #DDE3EE; font-weight: 600">Show applied version</a></span></div>
+<div class="l"><span class="n">4</span><span class="c"><span class="k">export async function</span> <span class="f">up</span>({ db }) {</span></div>
+<div class="l"><span class="n">5</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'invoices'</span>).<span class="f">updateMany</span>(</span></div>
+<div class="l"><span class="n">6</span><span class="c">    { currency: { $exists: <span class="k">false</span> } },</span></div>
+<div class="l"><span class="n">7</span><span class="c">    { $set: { currency: <span class="s">'USD'</span> } },</span></div>
+<div class="l"><span class="n">8</span><span class="c">  );</span></div>
+<div class="l"><span class="n">9</span><span class="c">}</span></div>
+<div class="l"><span class="n">10</span><span class="c"></span></div>
+<div class="l"><span class="n">11</span><span class="c"><span class="k">export async function</span> <span class="f">down</span>({ db }) {</span></div>
+<div class="l"><span class="n">12</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'invoices'</span>).<span class="f">updateMany</span>(</span></div>
+<div class="l" style="background: #24262D"><span class="n" style="box-shadow: inset 3px 0 0 #4C8DFF; color: #D4D6DB">13</span><span class="c">    { currency: <span class="s">'USD'</span>, <span style="text-decoration: underline wavy #E5A84B; text-underline-offset: 4px">migratedAt: { $exists: <span class="k">false</span> }</span> },</span></div>
+<div class="l"><span class="n">14</span><span class="c">    { $unset: { currency: <span class="s">''</span> } },</span></div>
+<div class="l"><span class="n">15</span><span class="c">  );</span></div>
+<div class="l"><span class="n">16</span><span class="c">}</span></div>
+
+<div role="tooltip" style="position: absolute; top: 296px; left: 150px; width: 480px; max-width: calc(100% - 166px); box-sizing: border-box; background: #25262C; border: 1px solid #3A3C44; border-radius: 6px; box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 1.5; white-space: normal">
+<div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; gap: 8px; align-items: center; font-weight: 600; color: #F2C27A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>This migration has already run</div>
+<p style="margin: 0; color: #D4D6DB">It ran on prod and staging on 15 Sep, and on your local database. If you save this edit, its checksum changes for all three:</p>
+<ul style="margin: 0; padding-left: 18px; color: #D4D6DB; display: flex; flex-direction: column; gap: 2px">
+<li><code style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">mmk down</code> will refuse to roll it back</li>
+<li><code style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">mmk status</code> will mark it as changed</li>
+<li>Nothing re-runs it: the databases keep the old result</li>
+</ul>
+<p style="margin: 0; color: #9DA1A9">To change the data that's there now, write a new migration instead.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 14px; border-top: 1px solid #3A3C44; font-size: 12.5px">
+<a href="VSDiff.dc.html" style="font-weight: 600">Show applied version</a>
+<button type="button" style="background: none; border: none; padding: 0; font: inherit; color: #7FB6FF; cursor: pointer">Undo my edit</button>
+<a href="VSCreate.dc.html">Create a new migration</a>
+<span style="margin-left: auto; color: #8B909A; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px">mmk(applied-edited)</span>
+</div>
+</div>
+</div>
+
+<div style="flex: none; border-top: 1px solid #2C2D33; background: #19191D; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 18px; padding: 0 16px; height: 34px; font-size: 11px; letter-spacing: 0.06em">
+<button type="button" style="background: none; border: none; padding: 0; height: 34px; font: inherit; color: #E8EAED; box-shadow: inset 0 -1px 0 #E8EAED; cursor: pointer">PROBLEMS <span style="padding: 0 6px; border-radius: 999px; background: #3A3C44; letter-spacing: 0">1</span></button>
+<button type="button" style="background: none; border: none; padding: 0; height: 34px; font: inherit; color: #8B909A; cursor: pointer">OUTPUT</button>
+<button type="button" style="background: none; border: none; padding: 0; height: 34px; font: inherit; color: #8B909A; cursor: pointer">TERMINAL</button>
+</div>
+<div style="padding: 2px 16px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 6px; color: #D4D6DB"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B909A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg><span style="font-weight: 600">backfill-invoice-currency.js</span><span style="color: #8B909A">migrations</span><span style="padding: 0 6px; border-radius: 999px; background: #3A3C44; font-size: 11px">1</span></div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding-left: 20px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E5A84B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="align-self: center"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg><span style="color: #D4D6DB">This migration already ran on local, staging and prod. Saving the edit changes its checksum, and mmk down will refuse to roll it back.</span><span style="color: #8B909A">mmk(applied-edited) [Ln 13, Col 24]</span></div>
+</div>
+</div>
+</div>
+
+</div>
+
+<footer style="flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; min-height: 26px; background: #18191D; border-top: 1px solid #2C2D33; font-size: 12px; color: #9DA1A9">
+<div style="display: flex; align-items: center; gap: 14px; padding: 0 10px">
+<span style="display: inline-flex; align-items: center; gap: 5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 8v8"></path><path d="M18 10c0 4-4 5-10 6"></path></svg>feat/refunds*</span>
+<span style="display: inline-flex; align-items: center; gap: 5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg>0<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E5A84B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg><span style="color: #F2C27A">1</span></span>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; padding-left: 10px">
+<span>Ln 13, Col 24</span>
+<span>JavaScript</span>
+<a href="VSEnv.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; background: #2E5BD8; color: #FFFFFF; text-decoration: none; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg>mmk: local · 2 pending</a>
+</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

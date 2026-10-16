@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "additionalDirectories": ["/Users/santoshgupta/Desktop/development/mongo-migrate-kit"],
+    "deny": ["Edit(//Users/santoshgupta/Desktop/development/mongo-migrate-kit/**)"]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/mmk-context.sh\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

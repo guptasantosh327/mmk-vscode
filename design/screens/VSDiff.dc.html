@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VS Code · mmk · Diff against the applied version</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#1F2024}
+a{color:#7FB6FF}a:hover{color:#A9CCFF}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #4C8DFF;outline-offset:1px}
+.l{display:flex;min-height:20px}
+.n{flex:none;width:48px;padding-right:16px;box-sizing:border-box;text-align:right;color:#8B909A;user-select:none}
+.c{white-space:pre}
+.k{color:#D19AF4}.f{color:#7FB6FF}.s{color:#A8D98A}.m{color:#F5A97F}
+</style>
+</helmet>
+<div style="position: relative; min-height: 100vh; display: flex; flex-direction: column; background: #1F2024; color: #D4D6DB; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 1.45; overflow: hidden">
+
+<div style="flex: none; height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: #18191D; border-bottom: 1px solid #2C2D33; font-size: 12px; color: #9DA1A9">
+<span style="display: flex; gap: 8px" aria-hidden="true"><span style="width: 12px; height: 12px; border-radius: 999px; background: #FF5F57"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #FEBC2E"></span><span style="width: 12px; height: 12px; border-radius: 999px; background: #28C840"></span></span>
+<span style="flex: 1 1 auto; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">backfill-invoice-currency.js (applied ↔ working tree) — billing-api</span>
+<span style="width: 52px"></span>
+</div>
+
+<div style="flex: 1 0 auto; display: flex; flex-wrap: wrap">
+
+<nav aria-label="Views" style="flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; padding-top: 4px; background: #18191D; border-right: 1px solid #2C2D33">
+<a href="VSDrift.dc.html" aria-label="Explorer" aria-current="page" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #E8EAED; box-shadow: inset 2px 0 0 #4C8DFF"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></a>
+<button type="button" aria-label="Search" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+<button type="button" aria-label="Source control" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A; background: transparent; border: none; padding: 0; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 8v8"></path><path d="M18 10c0 4-4 5-10 6"></path></svg></button>
+<a href="VSTest.dc.html" aria-label="Testing" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"></path><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"></path><path d="M7.5 15h9"></path></svg></a>
+<a href="VSMain.dc.html" aria-label="mmk" style="width: 48px; height: 46px; display: flex; align-items: center; justify-content: center; color: #8B909A"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg></a>
+</nav>
+
+<div style="flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; background: #1F2024">
+<div style="flex: none; display: flex; background: #18191D; border-bottom: 1px solid #2C2D33; overflow-x: auto">
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; background: transparent; color: #8B909A; border: none; border-top: 2px solid transparent; border-right: 1px solid #2C2D33; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer"><span style="font-size: 10px; font-weight: 700; color: #A88F55">JS</span>backfill-invoice-currency.js</button>
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; background: #1F2024; color: #E8EAED; border: none; border-top: 2px solid #4C8DFF; border-right: 1px solid #2C2D33; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7FB6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M12 4v16"></path></svg>backfill-invoice-currency.js (applied ↔ working tree)</button>
+</div>
+
+<sc-if value="{{ isDiff }}" hint-placeholder-val="{{ true }}">
+<div style="flex: none; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px 16px; background: #1D2A44; border-bottom: 1px solid #2C3E66">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7FB6FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 600; color: #E8EAED">Found the version that ran: commit 4e1d9b2 · 12 Sep 2026 · Asha Rao</span>
+<span style="font-size: 12px; color: #B5C6E6">Its SHA-256 (3f9a1c07…be21) matches the checksum mmk recorded on local, staging and prod. mmk doesn't store file contents, so the extension searched this file's git history for a match.</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" onClick="{{ restore }}" style="height: 30px; padding: 0 12px; border-radius: 4px; border: none; background: #2E5BD8; color: #FFFFFF; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer">Restore applied version</button>
+<a href="VSCreate.dc.html" style="display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 4px; border: 1px solid #3F5583; color: #DDE3EE; text-decoration: none; font-size: 12.5px">Create a new migration</a>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ isRestored }}" hint-placeholder-val="{{ false }}">
+<div style="flex: none; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px 16px; background: #1B3326; border-bottom: 1px solid #2B5A40">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CC38A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg>
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 600; color: #E8EAED">Restored the version that ran</span>
+<span style="font-size: 12px; color: #B4D9C3">The file matches its checksum again on all three environments, and the warning is gone. Put your fix in a new migration.</span>
+</div>
+<a href="VSCreate.dc.html" style="display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 4px; background: #2E5BD8; color: #FFFFFF; text-decoration: none; font-size: 12.5px; font-weight: 600">Create a new migration</a>
+</div>
+</sc-if>
+
+<div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 20px">
+<div style="flex: 1 1 420px; min-width: 0; border-right: 1px solid #2C2D33; display: flex; flex-direction: column">
+<div style="flex: none; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 16px; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 12px; color: #B9BDC5; background: #1B1C20; border-bottom: 1px solid #2C2D33"><span style="font-family: 'IBM Plex Mono', monospace; color: #E8EAED">4e1d9b2</span>applied version · read-only</div>
+<div style="padding: 8px 0 16px; overflow-x: auto">
+<div class="l"><span class="n">1</span><span class="c"><span class="k">export const</span> description = <span class="s">"Backfill currency: 'USD' on old invoices"</span>;</span></div>
+<div class="l"><span class="n">2</span><span class="c"><span class="k">export const</span> author = <span class="s">'Asha Rao &lt;asha@example.com&gt;'</span>;</span></div>
+<div class="l"><span class="n">3</span><span class="c"></span></div>
+<div class="l"><span class="n">4</span><span class="c"><span class="k">export async function</span> <span class="f">up</span>({ db }) {</span></div>
+<div class="l"><span class="n">5</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'invoices'</span>).<span class="f">updateMany</span>(</span></div>
+<div class="l"><span class="n">6</span><span class="c">    { currency: { $exists: <span class="k">false</span> } },</span></div>
+<div class="l"><span class="n">7</span><span class="c">    { $set: { currency: <span class="s">'USD'</span> } },</span></div>
+<div class="l"><span class="n">8</span><span class="c">  );</span></div>
+<div class="l"><span class="n">9</span><span class="c">}</span></div>
+<div class="l"><span class="n">10</span><span class="c"></span></div>
+<div class="l"><span class="n">11</span><span class="c"><span class="k">export async function</span> <span class="f">down</span>({ db }) {</span></div>
+<div class="l"><span class="n">12</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'invoices'</span>).<span class="f">updateMany</span>(</span></div>
+<div class="l" style="background: {{ leftBg }}"><span class="n">13</span><span class="c">    { currency: <span class="s">'USD'</span> },</span></div>
+<div class="l"><span class="n">14</span><span class="c">    { $unset: { currency: <span class="s">''</span> } },</span></div>
+<div class="l"><span class="n">15</span><span class="c">  );</span></div>
+<div class="l"><span class="n">16</span><span class="c">}</span></div>
+</div>
+</div>
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column">
+<div style="flex: none; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 16px; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 12px; color: #B9BDC5; background: #1B1C20; border-bottom: 1px solid #2C2D33"><span style="color: #E8EAED">Working tree</span>{{ rightLabel }}</div>
+<div style="padding: 8px 0 16px; overflow-x: auto">
+<div class="l"><span class="n">1</span><span class="c"><span class="k">export const</span> description = <span class="s">"Backfill currency: 'USD' on old invoices"</span>;</span></div>
+<div class="l"><span class="n">2</span><span class="c"><span class="k">export const</span> author = <span class="s">'Asha Rao &lt;asha@example.com&gt;'</span>;</span></div>
+<div class="l"><span class="n">3</span><span class="c"></span></div>
+<div class="l"><span class="n">4</span><span class="c"><span class="k">export async function</span> <span class="f">up</span>({ db }) {</span></div>
+<div class="l"><span class="n">5</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'invoices'</span>).<span class="f">updateMany</span>(</span></div>
+<div class="l"><span class="n">6</span><span class="c">    { currency: { $exists: <span class="k">false</span> } },</span></div>
+<div class="l"><span class="n">7</span><span class="c">    { $set: { currency: <span class="s">'USD'</span> } },</span></div>
+<div class="l"><span class="n">8</span><span class="c">  );</span></div>
+<div class="l"><span class="n">9</span><span class="c">}</span></div>
+<div class="l"><span class="n">10</span><span class="c"></span></div>
+<div class="l"><span class="n">11</span><span class="c"><span class="k">export async function</span> <span class="f">down</span>({ db }) {</span></div>
+<div class="l"><span class="n">12</span><span class="c">  <span class="k">await</span> db.<span class="f">collection</span>(<span class="s">'invoices'</span>).<span class="f">updateMany</span>(</span></div>
+<sc-if value="{{ isDiff }}" hint-placeholder-val="{{ true }}">
+<div class="l" style="background: #1F3527"><span class="n">13</span><span class="c">    { currency: <span class="s">'USD'</span>, <span style="background: #2F5A3B">migratedAt: { $exists: <span class="k">false</span> }</span> },</span></div>
+</sc-if>
+<sc-if value="{{ isRestored }}" hint-placeholder-val="{{ false }}">
+<div class="l"><span class="n">13</span><span class="c">    { currency: <span class="s">'USD'</span> },</span></div>
+</sc-if>
+<div class="l"><span class="n">14</span><span class="c">    { $unset: { currency: <span class="s">''</span> } },</span></div>
+<div class="l"><span class="n">15</span><span class="c">  );</span></div>
+<div class="l"><span class="n">16</span><span class="c">}</span></div>
+</div>
+</div>
+</div>
+
+<div style="flex: none; display: flex; gap: 10px; align-items: flex-start; margin: 0 16px 16px; padding: 10px 12px; border: 1px solid #33353C; border-radius: 6px; background: #1B1C20; font-size: 12.5px; color: #B9BDC5">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9DA1A9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+<span>Why it matters: prod's data was written by the left-hand <code style="font-family: 'IBM Plex Mono', monospace">up()</code>, but a rollback would run the right-hand <code style="font-family: 'IBM Plex Mono', monospace">down()</code>. Invoices that already have <code style="font-family: 'IBM Plex Mono', monospace">migratedAt</code> would keep their currency.</span>
+</div>
+</div>
+
+</div>
+
+<footer style="flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; min-height: 26px; background: #18191D; border-top: 1px solid #2C2D33; font-size: 12px; color: #9DA1A9">
+<div style="display: flex; align-items: center; gap: 14px; padding: 0 10px">
+<span style="display: inline-flex; align-items: center; gap: 5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 8v8"></path><path d="M18 10c0 4-4 5-10 6"></path></svg>feat/refunds*</span>
+<span style="display: inline-flex; align-items: center; gap: 5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg>0<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path></svg>{{ warnCount }}</span>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; padding-left: 10px">
+<span>JavaScript</span>
+<a href="VSEnv.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; background: #2E5BD8; color: #FFFFFF; text-decoration: none; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg>mmk: local · 2 pending</a>
+</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const restored = !!(this.state && this.state.restored);
+    return {
+      isDiff: !restored,
+      isRestored: restored,
+      leftBg: restored ? 'transparent' : '#3A2226',
+      rightLabel: restored ? ' · matches applied version' : ' · edited (unsaved)',
+      warnCount: restored ? '0' : '1',
+      restore: () => this.setState({ restored: true })
+    };
+  }
+}
+</script>
+</body>
+</html>
