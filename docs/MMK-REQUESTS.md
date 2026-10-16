@@ -138,7 +138,12 @@ and the compatibility table.
 
 ---
 
-## R9 — Keep stdout to the JSON document in `--json` mode · Phase 2 (optional) · `open`
+## R9 — Keep stdout to the JSON document in `--json` mode · Phase 2 (optional) · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/json-output` (commit `905f178`, not pushed,
+not released). Checked through `file:../mongo-migrate-kit`: the only contract test that changes is
+"stdout from user code", whose `otherStdout` becomes `''`. When it's released, update that test.
+Keep the tolerant parser in `parseJsonStdout`, because older mmk versions still leak.
 
 **Why:** found in Phase 1. `--json` promises one JSON document on stdout, but mmk only routes its
 *own* logger to stderr. A `console.log` in a migration, a hook or a config function still goes to
@@ -156,7 +161,12 @@ the command, and write the JSON document through the original stdout.
 
 ---
 
-## R10 — Results of the files that ran, when a run fails · Phase 2 (optional) · `open`
+## R10 — Results of the files that ran, when a run fails · Phase 2 (optional) · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/json-output` (commit `6f7041e`, not pushed,
+not released). The contract tests still pass against it. Covers `up`, `down` and `redo` (the revert
+comes first), and the library's `err.context.results`. When it's released, add `details.results`
+to the contract test for `MIGRATION_EXECUTION_FAILED` and read it in the A3 notification.
 
 **Why:** found in Phase 1. When `mmk up --json` applies two files and the third throws, mmk prints
 only the error document. The results of the two files that did apply are dropped, so the A3
