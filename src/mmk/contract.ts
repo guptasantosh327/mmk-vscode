@@ -1,5 +1,7 @@
 import type {
+  ConfigSummary,
   LockInfo,
+  MigrationExtension,
   MmkErrorCode,
   RunResult,
   RunResultStatus,
@@ -106,6 +108,27 @@ export function parseUnlockResult(value: unknown): UnlockResult {
   return { released: result.released, holder };
 }
 
+/** Parse the output of `mmk config --json` */
+export function parseConfigSummary(value: unknown): Wire<ConfigSummary> {
+  return checkFields<Wire<ConfigSummary>>('config', 'the output', value, CONFIG_SUMMARY_RULES);
+}
+
+/**
+ * The results of the files that ran before a run failed (`details.results`, mmk 1.6 and later),
+ * or null when mmk didn't report them.
+ */
+export function runResultsOfFailure(failure: MmkFailure): Wire<RunResult>[] | null {
+  const results = failure.details?.results;
+  if (!Array.isArray(results)) {
+    return null;
+  }
+  try {
+    return parseRunResults(results, 'run');
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The failure inside mmk's error document, or null when `value` isn't one. Only `error.message`
  * is required, because a crash that isn't one of mmk's own errors has no code.
@@ -200,6 +223,32 @@ const LOCK_INFO_RULES = {
   acquiredAt: optional(isIsoDate, 'an ISO date string'),
   expiresAt: optional(isIsoDate, 'an ISO date string'),
 } satisfies Record<keyof LockInfo, FieldRule>;
+
+/** Every `MigrationExtension`; a `Record` so the compiler flags a value added to mmk's type */
+const MIGRATION_EXTENSIONS: Record<MigrationExtension, true> = { js: true, ts: true };
+
+const isStringArray = (value: unknown): boolean =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+const CONFIG_SUMMARY_RULES = {
+  configFile: required(nullable(isString), 'a string or null'),
+  migrationsDir: required(isString, 'a string'),
+  fileExtensions: required(isStringArray, 'an array of strings'),
+  createExtension: required(oneOf(Object.keys(MIGRATION_EXTENSIONS)), '"js" or "ts"'),
+  sequential: required(isBoolean, 'true or false'),
+  migrationsCollection: required(isString, 'a string'),
+  lockCollection: required(isString, 'a string'),
+  lockTTLSeconds: required(isNumber, 'a number'),
+  strict: required(isBoolean, 'true or false'),
+  useTransaction: required(isBoolean, 'true or false'),
+  requireAuthor: required(isBoolean, 'true or false'),
+  namespace: optional(isString, 'a string'),
+  author: optional(isString, 'a string'),
+  templatePath: optional(isString, 'a string'),
+  dbName: required(nullable(isString), 'a string or null'),
+  uri: required(nullable(isString), 'a string or null'),
+  sources: required(isRecord, 'an object'),
+} satisfies Record<keyof ConfigSummary, FieldRule>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

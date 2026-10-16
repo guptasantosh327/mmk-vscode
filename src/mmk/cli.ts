@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { type MmkFailure, parseErrorDocument } from './contract.js';
+import { formatDuration } from './model.js';
 import { redactMongoUri } from './redact.js';
 
 /** How to run one project's mmk */
@@ -142,6 +143,16 @@ export async function runMmkVersion(
  */
 export function describeCommand(args: readonly string[]): string {
   return ['mmk', ...args.map(quoteArgument)].join(' ');
+}
+
+/**
+ * What to type in a terminal at the workspace folder to run these arguments the way the
+ * extension does: `npx mmk up x.js`, preceded by `cd <folder> &&` when the project is in a
+ * subfolder (`relativeDir`, empty for the workspace folder itself).
+ */
+export function terminalCommand(args: readonly string[], relativeDir: string): string {
+  const command = `npx ${describeCommand(args)}`;
+  return relativeDir === '' ? command : `cd ${quoteArgument(relativeDir)} && ${command}`;
 }
 
 /**
@@ -307,11 +318,6 @@ function lastLines(stderr: string): string {
     .map((line) => line.trim())
     .filter((line) => line !== '');
   return lines.length === 0 ? '' : ` mmk said: ${lines.slice(-3).join(' / ')}`;
-}
-
-/** `300 ms`, `15 s`, `1.5 s` */
-function formatDuration(ms: number): string {
-  return ms < 1000 ? `${ms} ms` : `${Number((ms / 1000).toFixed(1))} s`;
 }
 
 /** Quote an argument the way a POSIX shell needs it, only when it needs it */

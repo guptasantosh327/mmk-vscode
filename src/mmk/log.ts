@@ -14,8 +14,11 @@ export interface LogSink {
 
 /** The extension's logger: every line is masked before it reaches the sink */
 export interface Logger extends LogSink {
-  /** Log mmk's own human-readable output (its stderr in `--json` mode), line by line */
-  mmkOutput(text: string): void;
+  /**
+   * Log mmk's own human-readable output (its stderr in `--json` mode), line by line. Background
+   * reads log at `debug`, so the channel shows only what the user ran unless they ask for more.
+   */
+  mmkOutput(text: string, level?: 'info' | 'debug'): void;
 }
 
 /** Matches ANSI colour and cursor escape sequences */
@@ -33,10 +36,10 @@ export function createLogger(sink: LogSink): Logger {
     info: (message) => sink.info(redactMongoUri(message)),
     warn: (message) => sink.warn(redactMongoUri(message)),
     error: (message) => sink.error(redactMongoUri(message)),
-    mmkOutput: (text) => {
+    mmkOutput: (text, level = 'info') => {
       for (const line of text.replace(ANSI_ESCAPE, '').split(/\r?\n/)) {
         if (line.trim() !== '') {
-          sink.info(redactMongoUri(`  ${line}`));
+          sink[level](redactMongoUri(`  ${line}`));
         }
       }
     },
