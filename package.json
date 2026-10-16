@@ -40,13 +40,233 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mmk",
+          "title": "mmk",
+          "icon": "media/mmk.svg"
+        }
+      ]
+    },
+    "views": {
+      "mmk": [
+        {
+          "id": "mmk.migrations",
+          "name": "Migrations",
+          "icon": "media/mmk.svg",
+          "contextualTitle": "mmk"
+        }
+      ]
+    },
+    "viewsWelcome": [
       {
-        "command": "mmk.debug.showStatus",
-        "title": "Show status (debug)",
-        "category": "mmk"
+        "view": "mmk.migrations",
+        "when": "mmk.discovered && !mmk.hasProject",
+        "contents": "No mmk project in this workspace.\nmmk for VS Code looks for an mmk.config.js, .ts or .json, or a package.json that depends on mongo-migrate-kit.\n[Read the getting started guide](https://mongo-migrate-kit.vercel.app/guide/getting-started)\n[Refresh](command:mmk.refresh)"
+      },
+      {
+        "view": "mmk.migrations",
+        "when": "mmk.problem == 'mmk-missing'",
+        "contents": "mongo-migrate-kit isn't installed in this project.\nInstall it in the project (npm install mongo-migrate-kit mongodb), then refresh.\n[Refresh](command:mmk.refresh)\n[Show details](command:mmk.showOutput)"
+      },
+      {
+        "view": "mmk.migrations",
+        "when": "mmk.problem == 'too-old'",
+        "contents": "Update mongo-migrate-kit to 1.5.0 or later.\nThis project has an older version, and mmk for VS Code only reads the output of 1.5.0 or later. Run npm install --save-dev mongo-migrate-kit@latest, then refresh.\n[Refresh](command:mmk.refresh)\n[Show details](command:mmk.showOutput)"
+      },
+      {
+        "view": "mmk.migrations",
+        "when": "mmk.problem == 'node-missing'",
+        "contents": "Node.js wasn't found, and mmk needs it to run.\nInstall Node.js, or point the mmk.nodePath setting at the node executable.\n[Set the Node.js path](command:workbench.action.openSettings?%5B%22mmk.nodePath%22%5D)\n[Refresh](command:mmk.refresh)"
+      },
+      {
+        "view": "mmk.migrations",
+        "when": "mmk.problem == 'failed'",
+        "contents": "mmk couldn't start in this project.\nThe mmk output has its message.\n[Show details](command:mmk.showOutput)\n[Refresh](command:mmk.refresh)"
       }
     ],
+    "commands": [
+      {
+        "command": "mmk.refresh",
+        "title": "Refresh",
+        "category": "mmk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "mmk.createMigration",
+        "title": "Create migration",
+        "category": "mmk",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mmk.up",
+        "title": "Run up on local",
+        "category": "mmk",
+        "icon": "$(play)"
+      },
+      {
+        "command": "mmk.upAll",
+        "title": "Apply all pending on local",
+        "category": "mmk",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "mmk.down",
+        "title": "Run down on local",
+        "category": "mmk",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "mmk.redo",
+        "title": "Redo on local",
+        "category": "mmk",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "mmk.dryRun",
+        "title": "Dry run",
+        "category": "mmk",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "mmk.unlock",
+        "title": "Release the migration lock…",
+        "category": "mmk",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "mmk.copyCliCommand",
+        "title": "Copy CLI command",
+        "category": "mmk",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "mmk.selectEnvironment",
+        "title": "Select environment",
+        "category": "mmk"
+      },
+      {
+        "command": "mmk.showOutput",
+        "title": "Show output",
+        "category": "mmk",
+        "icon": "$(output)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "mmk.createMigration",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mmk.refresh",
+          "when": "view == mmk.migrations",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mmk.copyCliCommand",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "mmk.unlock",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "mmk.showOutput",
+          "when": "view == mmk.migrations",
+          "group": "2_output@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mmk.upAll",
+          "when": "view == mmk.migrations && viewItem == mmk.group.pending",
+          "group": "inline@1"
+        },
+        {
+          "command": "mmk.dryRun",
+          "when": "view == mmk.migrations && viewItem == mmk.group.pending",
+          "group": "inline@2"
+        },
+        {
+          "command": "mmk.up",
+          "when": "view == mmk.migrations && viewItem == mmk.migration.pending",
+          "group": "inline@1"
+        },
+        {
+          "command": "mmk.up",
+          "when": "view == mmk.migrations && viewItem == mmk.migration.pending",
+          "group": "1_run@1"
+        },
+        {
+          "command": "mmk.dryRun",
+          "when": "view == mmk.migrations && viewItem == mmk.migration.pending",
+          "group": "1_run@2"
+        },
+        {
+          "command": "mmk.down",
+          "when": "view == mmk.migrations && viewItem == mmk.migration.applied",
+          "group": "inline@1"
+        },
+        {
+          "command": "mmk.down",
+          "when": "view == mmk.migrations && viewItem == mmk.migration.applied",
+          "group": "1_run@1"
+        },
+        {
+          "command": "mmk.redo",
+          "when": "view == mmk.migrations && viewItem == mmk.migration.applied",
+          "group": "1_run@2"
+        },
+        {
+          "command": "mmk.copyCliCommand",
+          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.migration\\.(pending|applied)$/",
+          "group": "2_copy@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mmk.createMigration",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.up",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.upAll",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.down",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.redo",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.dryRun",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.unlock",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.copyCliCommand",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.selectEnvironment",
+          "when": "mmk.hasProject"
+        }
+      ]
+    },
     "configuration": {
       "title": "mmk",
       "properties": {
