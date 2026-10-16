@@ -10,15 +10,18 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** Phase 1 (Foundation) done locally on 2026-10-17: lint, typecheck, unit (120),
-  contract (23) and integration (5) are green on macOS. **Not yet seen green in CI**: the repo has
-  no remote yet, so `.github/workflows/ci.yml` has never run. Next: push, confirm CI, then
-  **Phase 2 — Local workflow**.
+- **Current phase:** **Phase 1 (Foundation) complete** on 2026-10-17. CI on Ubuntu is green
+  (lint, typecheck, unit 120, contract 23, integration 5). Next: **Phase 2 — Local workflow**,
+  which needs R2 (`mmk config --json`).
+- **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
+  santosh-lodha, which can read the repo's CI runs but not push).
 - **mmk version the contract tests pin:** 1.5.0 (= `MIN_MMK_VERSION`; a test keeps them equal)
-- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). R9 and R10 were added in Phase 1.
-- **Placeholders to confirm before publishing:** `publisher` (`guptasantosh327`) and `repository`
-  in `package.json`; the extension ID in tests (`test/integration/helpers.ts`,
-  `test/integration/run-installed.mjs`) follows `publisher`.
+- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). R9 and R10 are built on
+  MMK_REPO branch `feat/json-output`, which isn't pushed or released.
+- **Before the Phase 2 pre-release:** the publisher ID `guptasantosh327` (confirmed) must exist on
+  the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
+  (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
+- **Commits** carry only the owner's name: no Claude co-author trailer.
 - **Testing gotchas:** a development extension is exempt from Workspace Trust and
   `@vscode/test-electron` always passes `--disable-workspace-trust`, so trust is tested on the
   installed `.vsix` (`test/integration/run-installed.mjs`). Run from a VS Code terminal, the
