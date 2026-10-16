@@ -1,0 +1,96 @@
+{
+  "name": "mmk-vscode",
+  "displayName": "mmk for VS Code",
+  "description": "Run, roll back and review mongo-migrate-kit MongoDB migrations from the editor",
+  "version": "0.0.1",
+  "publisher": "guptasantosh327",
+  "license": "MIT",
+  "author": "Santosh Gupta",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/guptasantosh327/mmk-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "mongodb",
+    "migrations",
+    "mongo-migrate-kit",
+    "mmk"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "mmk runs the project's own mongo-migrate-kit from node_modules, which needs the files on disk."
+    }
+  },
+  "activationEvents": [
+    "workspaceContains:**/mmk.config.{js,ts,json}",
+    "workspaceContains:**/package.json"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mmk.debug.showStatus",
+        "title": "Show status (debug)",
+        "category": "mmk"
+      }
+    ],
+    "configuration": {
+      "title": "mmk",
+      "properties": {
+        "mmk.nodePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the Node.js executable that runs `mmk`. Leave empty to use `node` from `PATH`, the same one your terminal uses."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production",
+    "bundle": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --project unit",
+    "test:contract": "vitest run --project contract",
+    "pretest:integration": "node esbuild.js && tsc -p tsconfig.integration.json",
+    "test:integration": "vscode-test && node test/integration/run-installed.mjs",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "1.90.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "mongo-migrate-kit": "1.5.0",
+    "mongodb": "^6.12.0",
+    "mongodb-memory-server": "^10.1.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  }
+}

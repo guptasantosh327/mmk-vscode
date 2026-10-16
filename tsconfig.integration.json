@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "rootDir": ".",
+    "outDir": "out"
+  },
+  "include": ["test/integration"],
+  "exclude": ["node_modules", "dist", "out", "test/fixtures"]
+}
