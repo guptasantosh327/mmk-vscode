@@ -1,7 +1,6 @@
 {
   "permissions": {
-    "additionalDirectories": ["/Users/santoshgupta/Desktop/development/mongo-migrate-kit"],
-    "deny": ["Edit(//Users/santoshgupta/Desktop/development/mongo-migrate-kit/**)"]
+    "additionalDirectories": ["/Users/santoshgupta/Desktop/development/mongo-migrate-kit"]
   },
   "hooks": {
     "SessionStart": [
