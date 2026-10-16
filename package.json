@@ -2,7 +2,7 @@
   "name": "mmk-vscode",
   "displayName": "mmk for VS Code",
   "description": "Run, roll back and review mongo-migrate-kit MongoDB migrations from the editor",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "guptasantosh327",
   "license": "MIT",
   "author": "Santosh Gupta",
