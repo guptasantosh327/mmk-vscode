@@ -11,9 +11,10 @@
 > Keep this block short and current. Update it at the end of every phase.
 
 - **Current phase:** Phases 3–6 in progress on stacked branches (`feat/environments` →
-  later phases), started 2026-10-17. **Phase 3 (Environments) complete** on `feat/environments`:
-  green on the pinned 1.5.0 *and* on a local build of the next mmk. Its read-only-user criterion
-  needs R3, which only that build has. Phase 2's 0.1.0 pre-release was skipped: the owner
+  `feat/applied-file-protection` → …), started 2026-10-17. **Phase 3 (Environments)** and
+  **Phase 4 (Applied-file protection)** complete: green on the pinned 1.5.0 *and* on a local
+  build of the next mmk. Their exit criteria need R3 / R5, which only that build has; on 1.5 the
+  edit warning stays off (and says so). Phase 2's 0.1.0 pre-release was skipped: the owner
   publishes once, at 1.0.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
   branches in a throwaway clone, stamp it `1.6.0-dev.0`, `npm pack`, then
@@ -192,6 +193,8 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── model.ts             # sidebar groups from StatusRow[], date/duration labels
 │   │   ├── naming.ts            # create preview (mirrors mmk's slugify) + display names
 │   │   ├── migration-functions.ts # where up()/down() are, for run links
+│   │   ├── checksum.ts          # mmk's checksum of editor text (rule 1, exception 1)
+│   │   ├── applied-edits.ts     # which environments a text differs from, B1 wording
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
 │   │   ├── environments.ts      # mmk.environments, read-only rule (assertCanRun), MMK_URI/MMK_DB
 │   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
@@ -207,7 +210,7 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── sidebar.ts           # TreeDataProvider
 │   │   ├── codelens.ts
 │   │   ├── decorations.ts       # Explorer badges
-│   │   ├── diagnostics.ts       # "this migration already ran"
+│   │   ├── applied-protection.ts # B1/B2: diagnostic, hover, mmk-applied: docs, diff, restore
 │   │   ├── statusbar.ts
 │   │   ├── branch-watch.ts      # after a checkout: local migrations from another branch
 │   │   └── matrix/panel.ts      # webview (C2); its HTML/JS/CSS are in media/matrix/

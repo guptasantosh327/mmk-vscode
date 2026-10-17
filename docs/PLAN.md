@@ -247,6 +247,30 @@ applied file raises the diagnostic before save.
 **Exit criteria:** editing an applied file warns before saving, and "Show applied version" opens the
 matching commit's version.
 
+*Built as:*
+- `src/mmk/checksum.ts` is the mirrored hash (rule 1, exception 1). A clean document is hashed
+  from its bytes on disk, exactly as mmk reads it, so mixed line endings (which VS Code
+  normalizes in the editor) can't cause a false warning. A dirty one is hashed from its text,
+  with the BOM put back when the file on disk has one: reading the file's first bytes replaces
+  `TextDocument.encoding`, which `engines.vscode ^1.90` doesn't have. `checksum.contract.test.ts`
+  checks LF, CRLF, BOM, BOM + CRLF and non-ASCII files against the checksum mmk wrote, read
+  from the changelog directly (so it runs on 1.5 too), and against `StatusRow.checksum` on the
+  next mmk.
+- Every environment's rows are compared, not only the selected one: the warning names each
+  environment whose recorded checksum differs (`src/mmk/applied-edits.ts`).
+- The changed range is the diff against the file on disk while that is still the version that
+  ran (an unsaved edit), otherwise against the version found in git. Until git answers, it's the
+  line of `up()`.
+- With an mmk that reports no checksums (1.5), nothing warns; editing an applied file says once
+  per project that a newer mongo-migrate-kit adds the warning.
+- The applied version is found with one `git log --follow --name-only` and one
+  `git cat-file --batch` over every version of the file. The newest commit whose content hashes
+  to the recorded checksum wins, so a pure rename commit counts as that version.
+- "Undo my edit" reverts the editor when the file on disk is still the version that ran, and
+  otherwise restores it from git. "Restore applied version" replaces the text and saves the
+  file. The diff's title actions show while `mmk.inAppliedDiff` is set (the active tab is a diff
+  whose left side is `mmk-applied:`).
+
 ---
 
 ## Phase 5 — Rollback tests and lint
