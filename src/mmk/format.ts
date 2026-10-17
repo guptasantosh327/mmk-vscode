@@ -1,5 +1,4 @@
-import type { StatusRow } from 'mongo-migrate-kit';
-import type { Wire } from './contract.js';
+import type { WireStatusRow } from './contract.js';
 
 /** Column headings, in the same order as mmk's own `status` table */
 const HEADINGS = ['Migration', 'Status', 'Batch', 'Applied At', 'Checksum', 'Author'] as const;
@@ -8,7 +7,7 @@ const HEADINGS = ['Migration', 'Status', 'Batch', 'Applied At', 'Checksum', 'Aut
  * Render status rows as a plain-text table for the output channel, one string per line. Shows
  * exactly what mmk returned: dates stay as mmk's ISO strings, and nothing is recomputed.
  */
-export function formatStatusTable(rows: readonly Wire<StatusRow>[]): string[] {
+export function formatStatusTable(rows: readonly WireStatusRow[]): string[] {
   if (rows.length === 0) {
     return ['No migrations found'];
   }

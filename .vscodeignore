@@ -19,3 +19,5 @@ tsconfig*.json
 vitest.config.mts
 **/*.map
 **/*.ts
+!node_modules/@vscode/codicons/dist/codicon.css
+!node_modules/@vscode/codicons/dist/codicon.ttf

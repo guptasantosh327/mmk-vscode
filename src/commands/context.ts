@@ -1,14 +1,9 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { ProjectConfig } from '../mmk/contract.js';
+import type { Environment } from '../mmk/environments.js';
 import type { Logger } from '../mmk/log.js';
 import type { MigrationRef, MmkStore, ProjectSnapshot } from '../mmk/store.js';
-
-/**
- * The environment the extension runs against. Until environments arrive (Phase 3) it is always
- * the project's own config and `.env`, which this name stands for.
- */
-export const LOCAL = 'local';
+import type { EnvironmentRegistry } from './environment-registry.js';
 
 /** Asks the user to confirm a write; returns true only for an explicit yes */
 export type Confirm = (message: string, detail: string, action: string) => Promise<boolean>;
@@ -16,6 +11,8 @@ export type Confirm = (message: string, detail: string, action: string) => Promi
 /** What every command and view needs */
 export interface Deps {
   store: MmkStore;
+  /** The environments from settings and their connections in the keychain */
+  environments: EnvironmentRegistry;
   log: Logger;
   channel: vscode.LogOutputChannel;
   /** Ask before `down`, `redo`, `--force` and `unlock`. Integration tests replace it */
@@ -122,18 +119,21 @@ export function relativeDir(dir: string): string {
 }
 
 /**
- * Where records are read from, for display: `localhost:27017/orders_dev`. Built from mmk's
- * resolved config, whose connection string already has its credentials hidden.
+ * Where a project's records on an environment are read from, for display:
+ * `localhost:27017/orders_dev`, with no credentials. For `local` it comes from mmk's resolved
+ * config, for the others from the stored connection.
  */
-export function databaseLabel(config: ProjectConfig | null): string {
-  if (!config?.uri) {
-    return 'no connection string set';
+export function databaseLabel(project: ProjectSnapshot | undefined, environment: string): string {
+  const status = project?.environments[environment];
+  if (status && !status.connected) {
+    return 'not set up for this project';
   }
-  const hosts = config.uri
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
-    .replace(/^.*@/, '')
-    .replace(/[/?].*$/, '');
-  return config.dbName ? `${hosts}/${config.dbName}` : hosts;
+  return status?.database ?? (environment === 'local' ? "this project's config" : 'not read yet');
+}
+
+/** The environment commands act on: the selected one */
+export function currentEnvironment(deps: Deps): Environment {
+  return deps.store.selected();
 }
 
 /** The file name for messages: without the timestamp, as the sidebar shows it */

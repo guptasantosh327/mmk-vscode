@@ -46,9 +46,18 @@ describe('parseStatusRows', () => {
   });
 
   it('should keep fields this extension does not read yet', () => {
-    const row = { ...APPLIED_ROW, checksum: 'abc123' };
+    const row = { ...APPLIED_ROW, recordedBy: 'a field from a newer mmk' };
 
     expect(parseStatusRows([row], 'status')).toEqual([row]);
+  });
+
+  it('should accept the recorded checksum (R5) and refuse one that is not a SHA-256', () => {
+    const checksum = 'a'.repeat(64);
+
+    expect(parseStatusRows([{ ...APPLIED_ROW, checksum }], 'status')[0]?.checksum).toBe(checksum);
+    expect(() => parseStatusRows([{ ...APPLIED_ROW, checksum: 'abc123' }], 'status')).toThrow(
+      'row 0.checksum should be a SHA-256 hex string, but it is the string "abc123"',
+    );
   });
 
   it('should refuse output that is not an array', () => {

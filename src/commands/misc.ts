@@ -1,10 +1,8 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { terminalCommand } from '../mmk/cli.js';
 import {
   type Deps,
-  LOCAL,
-  databaseLabel,
+  currentEnvironment,
   relativeDir,
   resolveMigration,
   resolveProject,
@@ -12,24 +10,31 @@ import {
   targetsFile,
 } from './context.js';
 
-/** Register "Copy CLI command", "Select environment" and "Show output" */
+/** Register "Copy CLI command" and "Show output" */
 export function registerMiscCommands(deps: Deps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('mmk.copyCliCommand', (target?: unknown) =>
       copyCliCommand(deps, target),
     ),
-    vscode.commands.registerCommand('mmk.selectEnvironment', () => selectEnvironment(deps)),
     vscode.commands.registerCommand('mmk.showOutput', () => deps.channel.show(true)),
   ];
 }
 
+interface Choice {
+  args: string[];
+  detail: string;
+}
+
 /**
  * Copy the terminal command for an action on a migration (or a project), so every action can be
- * run outside the editor too.
+ * run outside the editor too. On an environment other than local, the command sets `MMK_URI`
+ * and `MMK_DB`, with a placeholder where the connection string goes: it is never copied.
  */
 async function copyCliCommand(deps: Deps, target: unknown): Promise<string | undefined> {
+  const environment = currentEnvironment(deps);
+  const status: Choice = { args: ['status'], detail: 'Show every migration and where it has run' };
   let dir: string;
-  let choices: Array<{ args: string[]; detail: string }>;
+  let choices: Choice[];
   if (targetsFile(target)) {
     const ref = resolveMigration(deps, target);
     if (!ref) {
@@ -37,39 +42,54 @@ async function copyCliCommand(deps: Deps, target: unknown): Promise<string | und
     }
     dir = ref.project.dir;
     const name = shortName(ref.file);
-    choices =
-      ref.row?.status === 'applied'
-        ? [
-            { args: ['down', ref.file], detail: `Roll back ${name}` },
-            { args: ['redo', ref.file], detail: `Roll back ${name}, then apply it again` },
-            { args: ['status'], detail: 'Show every migration and where it has run' },
-          ]
-        : [
-            { args: ['up', ref.file], detail: `Apply ${name}` },
-            { args: ['dry-run', 'up', ref.file], detail: `Preview applying ${name}` },
-            { args: ['status'], detail: 'Show every migration and where it has run' },
-          ];
+    const applied = ref.row?.status === 'applied';
+    const writes: Choice[] = applied
+      ? [
+          { args: ['down', ref.file], detail: `Roll back ${name}` },
+          { args: ['redo', ref.file], detail: `Roll back ${name}, then apply it again` },
+        ]
+      : [{ args: ['up', ref.file], detail: `Apply ${name}` }];
+    const preview: Choice = applied
+      ? { args: ['dry-run', 'down', ref.file], detail: `Preview rolling back ${name}` }
+      : { args: ['dry-run', 'up', ref.file], detail: `Preview applying ${name}` };
+    choices = environment.readOnly ? [preview, status] : [...writes, preview, status];
   } else {
     const project = await resolveProject(deps, target);
     if (!project) {
       return undefined;
     }
     dir = project.dir;
-    choices = [
-      { args: ['up'], detail: 'Apply every pending migration' },
+    const reads: Choice[] = [
       { args: ['dry-run', 'up'], detail: 'Preview what up would apply' },
-      { args: ['status'], detail: 'Show every migration and where it has run' },
-      { args: ['down'], detail: 'Roll back the last batch' },
+      status,
+      { args: ['list', '--pending'], detail: 'List only the pending migrations' },
     ];
+    choices = environment.readOnly
+      ? reads
+      : [
+          { args: ['up'], detail: 'Apply every pending migration' },
+          ...reads,
+          { args: ['down'], detail: 'Roll back the last batch' },
+        ];
   }
 
+  let prefix = '';
+  if (!environment.local) {
+    const connection = await deps.environments.connection(dir, environment.name);
+    prefix = `MMK_URI='<${environment.name} connection string>' MMK_DB=${connection?.dbName ?? `<${environment.name} database>`} `;
+  }
   const where = relativeDir(dir);
   const picked = await vscode.window.showQuickPick(
     choices.map((choice) => ({
-      label: terminalCommand(choice.args, where),
-      detail: choice.detail,
+      label: withPrefix(terminalCommand(choice.args, where), prefix),
+      detail: `${choice.detail}${environment.local ? '' : ` on ${environment.name}`}`,
     })),
-    { title: 'mmk: Copy CLI command', placeHolder: 'Pick the command to copy' },
+    {
+      title: `mmk: Copy CLI command (${environment.name})`,
+      placeHolder: environment.local
+        ? 'Pick the command to copy'
+        : `Pick the command to copy. Put ${environment.name}'s connection string where it says so: it isn't copied.`,
+    },
   );
   if (!picked) {
     return undefined;
@@ -79,26 +99,11 @@ async function copyCliCommand(deps: Deps, target: unknown): Promise<string | und
   return picked.label;
 }
 
-/**
- * The environment picker (design C1). Until environments arrive there is only `local`: the
- * project's own config and `.env`.
- */
-async function selectEnvironment(deps: Deps): Promise<void> {
-  const projects = deps.store.snapshots();
-  const pending = projects.reduce(
-    (sum, project) =>
-      sum + (project.rows?.filter((row) => row.status === 'pending' && !row.unadopted).length ?? 0),
-    0,
-  );
-  const first = projects[0];
-  const local: vscode.QuickPickItem = {
-    label: `$(circle-filled) ${LOCAL}`,
-    detail: `${pending} pending · runs allowed · current · from ${
-      first?.state.root.configFile ? path.basename(first.state.root.configFile) : 'your config'
-    } and .env`,
-  };
-  if (first) {
-    local.description = databaseLabel(first.config);
+/** Put the environment variables right before `npx`, after any `cd … &&` */
+function withPrefix(command: string, prefix: string): string {
+  if (prefix === '') {
+    return command;
   }
-  await vscode.window.showQuickPick([local], { title: 'mmk: Select environment' });
+  const at = command.indexOf('npx ');
+  return `${command.slice(0, at)}${prefix}${command.slice(at)}`;
 }

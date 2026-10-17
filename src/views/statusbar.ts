@@ -1,8 +1,11 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { type Deps, LOCAL, databaseLabel, relativeDir } from '../commands/context.js';
+import { type Deps, databaseLabel, relativeDir } from '../commands/context.js';
 
-/** `mmk: local · 3 pending` in the status bar; a click opens the environment picker */
+/**
+ * `mmk: local · 3 pending` in the status bar; a click opens the environment picker. Its
+ * background follows the environment: default, warning (staging) or error (prod).
+ */
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
 
@@ -24,8 +27,10 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
 
+    const environment = this.deps.store.selected();
+    const name = environment.readOnly ? `${environment.name} · read-only` : environment.name;
     const ready = projects.filter((project) => project.state.kind === 'ready');
-    const running = projects.find((project) => project.running)?.running;
+    const running = projects.find((project) => project.running);
     const pending = projects.reduce(
       (sum, project) =>
         sum +
@@ -33,34 +38,51 @@ export class StatusBar implements vscode.Disposable {
       0,
     );
     const unread = ready.filter((project) => !project.rows);
+    const notSetUp = ready.every(
+      (project) => project.environments[environment.name]?.connected === false,
+    );
 
     if (ready.length === 0) {
       this.item.text = '$(warning) mmk';
-    } else if (running) {
-      this.item.text = `$(sync~spin) mmk: ${LOCAL} · running ${running}`;
+    } else if (running?.running) {
+      this.item.text = `$(sync~spin) mmk: ${running.runningOn ?? environment.name} · running ${running.running}`;
+    } else if (notSetUp) {
+      this.item.text = `$(warning) mmk: ${name} · not set up`;
     } else if (unread.length === ready.length && unread.some((project) => project.loading)) {
-      this.item.text = `$(sync~spin) mmk: ${LOCAL}`;
+      this.item.text = `$(sync~spin) mmk: ${name}`;
     } else if (unread.length === ready.length) {
-      this.item.text = `$(warning) mmk: ${LOCAL} · can't read status`;
+      this.item.text = `$(warning) mmk: ${name} · can't read status`;
     } else {
-      this.item.text = `$(layers) mmk: ${LOCAL} · ${pending === 0 ? 'up to date' : `${pending} pending`}`;
+      this.item.text = `$(layers) mmk: ${name} · ${pending === 0 ? 'up to date' : `${pending} pending`}`;
     }
 
+    this.item.backgroundColor =
+      environment.color === 'default'
+        ? undefined
+        : new vscode.ThemeColor(
+            environment.color === 'error'
+              ? 'statusBarItem.errorBackground'
+              : 'statusBarItem.warningBackground',
+          );
+
     const lines = projects.map((project) => {
-      const name = relativeDir(project.dir) || path.basename(project.dir);
+      const label = relativeDir(project.dir) || path.basename(project.dir);
       if (project.state.kind !== 'ready') {
-        return `**${name}**: ${project.state.message}`;
+        return `**${label}**: ${project.state.message}`;
       }
       if (project.error) {
-        return `**${name}**: ${project.error.message}`;
+        return `**${label}**: ${project.error.message}`;
       }
       const count = project.rows?.filter(
         (row) => row.status === 'pending' && !row.unadopted,
       ).length;
-      return `**${name}**: ${count === undefined ? 'reading…' : `${count} pending`} on ${LOCAL} (${databaseLabel(project.config)})`;
+      return `**${label}**: ${count === undefined ? 'reading…' : `${count} pending`} on ${environment.name} (${databaseLabel(project, environment.name)})`;
     });
+    const note = environment.readOnly
+      ? [`${environment.name} is read-only: only status, list and dry-run run there.`]
+      : [];
     this.item.tooltip = new vscode.MarkdownString(
-      [...lines, '', 'Click to see environments'].join('  \n'),
+      [...lines, ...note, '', 'Click to switch environments or compare them'].join('  \n'),
     );
     this.item.show();
   }

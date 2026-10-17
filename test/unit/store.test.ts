@@ -279,3 +279,221 @@ describe('MmkStore', () => {
     expect(changes).toBe(seen);
   });
 });
+
+describe('MmkStore with environments', () => {
+  const STAGING = { name: 'staging', readOnly: true, color: 'warning', local: false } as const;
+  const DEV = { name: 'dev', readOnly: false, color: 'warning', local: false } as const;
+  const LOCAL = { name: 'local', readOnly: false, color: 'default', local: true } as const;
+  const STAGING_CONNECTION = { uri: 'mongodb://reader:pw@staging.example.net', dbName: 'app' };
+  const APPLIED_ROW = {
+    file: '0001-a.js',
+    status: 'applied',
+    batch: 1,
+    appliedAt: '2026-10-15T10:00:00.000Z',
+    duration: 3,
+    checksumOk: true,
+  };
+
+  /** A fake mmk that answers status by the MMK_DB it was given, and records each env */
+  function envMmk(byDb: Record<string, unknown[]>): {
+    calls: Array<{ args: string[]; env: Readonly<Record<string, string>> }>;
+    run: (invocation: unknown, args: readonly string[], options: RunOptions) => Promise<JsonOutput>;
+  } {
+    const calls: Array<{ args: string[]; env: Readonly<Record<string, string>> }> = [];
+    return {
+      calls,
+      run: async (_invocation, args, options) => {
+        const env = options.env ?? {};
+        calls.push({ args: [...args], env });
+        let value: unknown;
+        if (args[0] === 'config') {
+          value = CONFIG;
+        } else if (args[0] === 'status') {
+          value = byDb[env.MMK_DB ?? 'local'] ?? [];
+        } else {
+          value = [];
+        }
+        return { value, exitCode: 0, stderr: '', otherStdout: '' };
+      },
+    };
+  }
+
+  const connections = async (_dir: string, environment: string) =>
+    environment === 'staging' || environment === 'dev'
+      ? { ...STAGING_CONNECTION, dbName: environment }
+      : null;
+
+  it('should read each environment with its own MMK_URI and MMK_DB, and local with neither', async () => {
+    const mmk = envMmk({ local: [PENDING_ROW], staging: [APPLIED_ROW] });
+    const store = new MmkStore({ log: quiet, run: mmk.run, connection: connections });
+    store.setEnvironments([LOCAL, STAGING], 'local');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    const statusCalls = mmk.calls.filter((call) => call.args[0] === 'status');
+    expect(statusCalls.map((call) => call.env)).toEqual(
+      expect.arrayContaining([{}, { MMK_URI: STAGING_CONNECTION.uri, MMK_DB: 'staging' }]),
+    );
+    const snapshot = store.snapshot(DIR);
+    expect(snapshot?.rows).toEqual([PENDING_ROW]);
+    expect(snapshot?.environments.staging).toMatchObject({
+      rows: [APPLIED_ROW],
+      connected: true,
+      database: 'staging.example.net/staging',
+    });
+  });
+
+  it('should show the selected environment, and keep the selection when told to', async () => {
+    const mmk = envMmk({ local: [PENDING_ROW], staging: [APPLIED_ROW] });
+    const store = new MmkStore({ log: quiet, run: mmk.run, connection: connections });
+    store.setEnvironments([LOCAL, STAGING], 'staging');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    expect(store.selected().name).toBe('staging');
+    expect(store.snapshot(DIR)?.rows).toEqual([APPLIED_ROW]);
+    store.select('local');
+    expect(store.snapshot(DIR)?.rows).toEqual([PENDING_ROW]);
+    store.select('nope');
+    expect(store.selected().name).toBe('local');
+  });
+
+  it('should fall back to local when the selected environment is gone', () => {
+    const store = new MmkStore({ log: quiet, run: envMmk({}).run });
+    store.setEnvironments([LOCAL], 'staging');
+
+    expect(store.selected().name).toBe('local');
+  });
+
+  it('should not read an environment this project has no connection for', async () => {
+    const mmk = envMmk({ local: [PENDING_ROW] });
+    const store = new MmkStore({ log: quiet, run: mmk.run, connection: async () => null });
+    store.setEnvironments([LOCAL, STAGING], 'local');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    expect(store.snapshot(DIR)?.environments.staging).toMatchObject({
+      connected: false,
+      rows: null,
+      error: null,
+    });
+    expect(mmk.calls.filter((call) => call.args[0] === 'status')).toHaveLength(1);
+  });
+
+  it('should refuse a write on a read-only environment without running mmk', async () => {
+    const mmk = envMmk({});
+    const store = new MmkStore({ log: quiet, run: mmk.run, connection: connections });
+    store.setEnvironments([LOCAL, STAGING], 'staging');
+    store.setProjects([ready()]);
+    await store.idle();
+    const before = mmk.calls.length;
+
+    for (const args of [['up'], ['down', '0001-a.js'], ['redo'], ['unlock', '--yes']]) {
+      await expect(store.run(DIR, args, args[0] ?? '')).rejects.toThrow(
+        /^staging is read-only, so mmk for VS Code won't run "mmk /,
+      );
+    }
+    // Naming the environment explicitly makes no difference.
+    await expect(store.run(DIR, ['up'], 'up', 'staging')).rejects.toBeInstanceOf(StoreError);
+    expect(mmk.calls.length).toBe(before);
+  });
+
+  it('should run a read on a read-only environment with its connection', async () => {
+    const mmk = envMmk({});
+    const store = new MmkStore({ log: quiet, run: mmk.run, connection: connections });
+    store.setEnvironments([LOCAL, STAGING], 'staging');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    await store.run(DIR, ['dry-run', 'up'], 'dry run');
+
+    expect(mmk.calls.find((call) => call.args[0] === 'dry-run')?.env).toEqual({
+      MMK_URI: STAGING_CONNECTION.uri,
+      MMK_DB: 'staging',
+    });
+  });
+
+  it('should run a write on a writable environment with its connection', async () => {
+    const mmk = envMmk({});
+    const store = new MmkStore({ log: quiet, run: mmk.run, connection: connections });
+    store.setEnvironments([LOCAL, DEV], 'dev');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    await store.run(DIR, ['up'], 'up');
+
+    expect(mmk.calls.find((call) => call.args[0] === 'up')?.env).toEqual({
+      MMK_URI: STAGING_CONNECTION.uri,
+      MMK_DB: 'dev',
+    });
+  });
+
+  it('should refuse to run on an environment with no stored connection', async () => {
+    const store = new MmkStore({ log: quiet, run: envMmk({}).run, connection: async () => null });
+    store.setEnvironments([LOCAL, DEV], 'dev');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    await expect(store.run(DIR, ['up'], 'up')).rejects.toThrow(
+      'There\'s no connection string for dev in billing-api. Run "mmk: Add environment…" or "mmk: Edit environment…" to set it.',
+    );
+  });
+
+  it('should refuse writes through read(), even on a writable environment', async () => {
+    const store = new MmkStore({ log: quiet, run: envMmk({}).run, connection: connections });
+    store.setEnvironments([LOCAL, DEV], 'dev');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    await expect(store.read(DIR, ['up'], 'dev')).rejects.toBeInstanceOf(StoreError);
+    await expect(store.read(DIR, ['status', '--dir', '/tmp/x'], 'dev')).resolves.toMatchObject({
+      exitCode: 0,
+    });
+  });
+
+  it("should read the config with another environment's connection when local has none", async () => {
+    const calls: Array<{ args: string[]; env: Readonly<Record<string, string>> }> = [];
+    const run = async (
+      _invocation: unknown,
+      args: readonly string[],
+      options: RunOptions,
+    ): Promise<JsonOutput> => {
+      const env = options.env ?? {};
+      calls.push({ args: [...args], env });
+      if (args[0] === 'config' && env.MMK_URI === undefined) {
+        throw new MmkCommandError(
+          { code: 'CONFIG_INVALID', message: 'uri is required but was not set' },
+          ['config', '--json'],
+          1,
+          '',
+        );
+      }
+      return {
+        value: args[0] === 'config' ? CONFIG : [],
+        exitCode: 0,
+        stderr: '',
+        otherStdout: '',
+      };
+    };
+    const store = new MmkStore({ log: quiet, run, connection: connections });
+    store.setEnvironments([LOCAL, STAGING], 'local');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    const configCalls = calls.filter((call) => call.args[0] === 'config');
+    expect(configCalls.map((call) => call.env.MMK_DB ?? 'local')).toEqual(['local', 'staging']);
+    expect(store.snapshot(DIR)?.config?.migrationsDir).toBe(MIGRATIONS);
+    expect(store.snapshot(DIR)?.environments.staging?.error).toBeNull();
+    expect(store.snapshot(DIR)?.environments.local?.error?.code).toBe('CONFIG_INVALID');
+  });
+
+  it('should label local from the config, and the others from their connection', async () => {
+    const store = new MmkStore({ log: quiet, run: envMmk({}).run, connection: connections });
+    store.setEnvironments([LOCAL, STAGING], 'local');
+    store.setProjects([ready()]);
+    await store.idle();
+
+    expect(store.snapshot(DIR)?.environments.local?.database).toBe('localhost:27017/orders_dev');
+    expect(store.snapshot(DIR)?.environments.staging?.database).toBe('staging.example.net/staging');
+  });
+});

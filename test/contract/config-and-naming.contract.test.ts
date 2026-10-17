@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MmkCommandError } from '../../src/mmk/cli.js';
 import { parseCreateResult, parseStatusRows } from '../../src/mmk/contract.js';
 import { previewFileName } from '../../src/mmk/naming.js';
-import { type ContractProject, FIXTURE_FILES, createProject } from './harness.js';
+import { type ContractProject, FIXTURE_FILES, createProject, hasNextMmk } from './harness.js';
 
 /**
  * How the extension reads a project's resolved config, and the one piece of mmk it mirrors: the
@@ -39,9 +39,8 @@ describe('reading the resolved config', () => {
     });
   });
 
-  it("asks mongo-migrate-kit's resolveConfig(), because mmk 1.5 has no `mmk config` command", async () => {
-    // When a release with `mmk config --json` (R2) is pinned, this becomes 'cli'.
-    expect((await project.readConfig()).via).toBe('library');
+  it('uses `mmk config --json` (R2) when mmk has it, and resolveConfig() on mmk 1.5', async () => {
+    expect((await project.readConfig()).via).toBe(hasNextMmk() ? 'cli' : 'library');
   });
 
   it('names the folder that status reads and create writes to', async () => {
@@ -62,22 +61,31 @@ describe('reading the resolved config', () => {
     expect(config.uri).toBe('mongodb://***:***@127.0.0.1:9/app');
   });
 
-  it("reports a missing connection as mmk does, with mmk's CONFIG_INVALID", async () => {
-    const error = await project.readConfig({ MMK_URI: '', MMK_DB: '' }).then(
-      () => undefined,
-      (reason: unknown) => reason,
-    );
+  it.runIf(hasNextMmk())('reads the config without a connection string (R2)', async () => {
+    const { config } = await project.readConfig({ MMK_URI: '', MMK_DB: '' });
 
-    expect(error).toBeInstanceOf(MmkCommandError);
-    const failure = (error as MmkCommandError).failure;
-    expect(failure.code).toBe('CONFIG_INVALID');
-    expect(failure.details?.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ key: 'uri' }),
-        expect.objectContaining({ key: 'dbName' }),
-      ]),
-    );
+    expect(config).toMatchObject({ migrationsDir: project.migrationsDir, uri: null, dbName: null });
   });
+
+  it.runIf(!hasNextMmk())(
+    "1.5: reports a missing connection with mmk's CONFIG_INVALID",
+    async () => {
+      const error = await project.readConfig({ MMK_URI: '', MMK_DB: '' }).then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+
+      expect(error).toBeInstanceOf(MmkCommandError);
+      const failure = (error as MmkCommandError).failure;
+      expect(failure.code).toBe('CONFIG_INVALID');
+      expect(failure.details?.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: 'uri' }),
+          expect.objectContaining({ key: 'dbName' }),
+        ]),
+      );
+    },
+  );
 });
 
 describe('create names files the way the preview says', () => {

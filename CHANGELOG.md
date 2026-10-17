@@ -2,6 +2,31 @@
 
 All notable changes to this extension are documented here.
 
+## Unreleased
+
+### Added
+
+- **Environments:** compare your branch with staging, prod or any other database. "mmk: Add
+  environment…" asks for a name, the connection string (masked) and the database, tests the
+  connection with `mmk status`, and makes it read-only unless you say otherwise. Connection
+  strings stay in the OS keychain and reach mmk as `MMK_URI` / `MMK_DB`; settings hold only the
+  names, read-only flags and colors (`mmk.environments`). "Edit environment…" and "Remove
+  environment…" too.
+- **Environment picker** from the status bar or the sidebar, with each environment's host,
+  pending count and read-only note. The status bar turns amber for staging and red for prod.
+- **Read-only environments** only run `status`, `list` and `dry-run`: the run links offer
+  *Dry run* and *Copy CLI command*, the sidebar drops *Apply all*, and every write command
+  refuses in code. Writes on any writable environment other than local ask first.
+- **Run links** show the other environments next to local's: `staging: applied`.
+- **Environments matrix** ("mmk: Compare all environments"): every migration against every
+  environment, with notes such as "On staging, not prod" and "Only on local so far", summary
+  chips, an "Only differences" filter, and a switch to compare the files on `origin/main`
+  (copied from git, without touching your checkout) instead of your branch.
+- **Branch switch warning:** after a checkout, local migrations whose files are on another
+  branch are named, with that branch.
+- A connection string written into `mmk.environments` gets a warning and a "Move to keychain"
+  button.
+
 ## 0.1.0 (pre-release) · 2026-10-17
 
 ### Added

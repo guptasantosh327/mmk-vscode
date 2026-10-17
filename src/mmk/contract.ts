@@ -21,6 +21,14 @@ export type Wire<T> = T extends Date
       : T;
 
 /**
+ * A row of `status`, `list` or `dry-run` as it arrives. mongo-migrate-kit after 1.5 adds
+ * `checksum` to `StatusRow` (request R5): the SHA-256 recorded when the file was applied. Until
+ * that release is pinned, the field is added here so the code compiles against both; once it
+ * is, this is plain `WireStatusRow`.
+ */
+export type WireStatusRow = Wire<StatusRow & { checksum?: string }>;
+
+/**
  * An error code from mmk. A newer mmk may return a code this extension doesn't know yet, so any
  * string is accepted while the known ones keep their autocompletion.
  */
@@ -70,9 +78,9 @@ export class ContractError extends Error {
 }
 
 /** Parse the rows of `mmk status --json`, `mmk list --json` or `mmk dry-run --json` */
-export function parseStatusRows(value: unknown, command: string): Wire<StatusRow>[] {
+export function parseStatusRows(value: unknown, command: string): WireStatusRow[] {
   return expectArray(command, 'the output', value).map((row, index) =>
-    checkFields<Wire<StatusRow>>(command, `row ${index}`, row, STATUS_ROW_RULES),
+    checkFields<WireStatusRow>(command, `row ${index}`, row, STATUS_ROW_RULES),
   );
 }
 
@@ -197,6 +205,8 @@ function optional(check: (value: unknown) => boolean, expected: string): FieldRu
 const isString = (value: unknown): boolean => typeof value === 'string';
 const isBoolean = (value: unknown): boolean => typeof value === 'boolean';
 const isNumber = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
+const isSha256 = (value: unknown): boolean =>
+  typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const isIsoDate = (value: unknown): boolean =>
   typeof value === 'string' && !Number.isNaN(Date.parse(value));
 
@@ -227,12 +237,13 @@ const STATUS_ROW_RULES = {
   appliedAt: required(nullable(isIsoDate), 'an ISO date string or null'),
   duration: required(nullable(isNumber), 'a number or null'),
   checksumOk: required(nullable(isBoolean), 'true, false or null'),
+  checksum: optional(isSha256, 'a SHA-256 hex string'),
   description: optional(isString, 'a string'),
   author: optional(isString, 'a string'),
   namespace: optional(isString, 'a string'),
   fileMissing: optional(isBoolean, 'true or false'),
   unadopted: optional(isBoolean, 'true or false'),
-} satisfies Record<keyof StatusRow, FieldRule>;
+} satisfies Record<keyof StatusRow | 'checksum', FieldRule>;
 
 const RUN_RESULT_RULES = {
   file: required(isString, 'a string'),

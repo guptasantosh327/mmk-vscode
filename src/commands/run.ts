@@ -1,21 +1,23 @@
-import type { RunResult, StatusRow } from 'mongo-migrate-kit';
+import type { RunResult } from 'mongo-migrate-kit';
 import * as vscode from 'vscode';
 import { type JsonOutput, MmkCommandError } from '../mmk/cli.js';
 import {
   type UnlockResult,
   type Wire,
+  type WireStatusRow,
   parseRunResults,
   parseStatusRows,
   parseUnlockResult,
   runResultsOfFailure,
 } from '../mmk/contract.js';
+import type { Environment } from '../mmk/environments.js';
 import { formatStatusTable } from '../mmk/format.js';
 import { formatDuration } from '../mmk/model.js';
 import { StoreError } from '../mmk/store.js';
 import type { ProjectSnapshot } from '../mmk/store.js';
 import {
   type Deps,
-  LOCAL,
+  currentEnvironment,
   databaseLabel,
   resolveMigration,
   resolveProject,
@@ -35,14 +37,50 @@ export function registerRunCommands(deps: Deps): vscode.Disposable[] {
   ];
 }
 
+/**
+ * The environment a write runs on, or undefined after telling the user why it can't. Read-only
+ * environments refuse here and again in the store, so no path around the UI can write to them.
+ */
+function writableEnvironment(deps: Deps, action: string): Environment | undefined {
+  const environment = currentEnvironment(deps);
+  if (environment.readOnly) {
+    void vscode.window.showWarningMessage(
+      `${environment.name} is read-only, so ${action} is turned off there. Deploys to ${environment.name} go through CI. Switch to local (or another writable environment) to run it.`,
+    );
+    return undefined;
+  }
+  return environment;
+}
+
+/** Writes outside `local` always ask first, even `up` */
+async function confirmRemoteWrite(
+  deps: Deps,
+  environment: Environment,
+  project: ProjectSnapshot,
+  what: string,
+): Promise<boolean> {
+  if (environment.local) {
+    return true;
+  }
+  return deps.confirm(
+    `${what} on ${environment.name}?`,
+    `This writes to ${databaseLabel(project, environment.name)}, not your local database.`,
+    'Run',
+  );
+}
+
 /** Run up for one migration file */
 async function runUp(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | undefined> {
   const ref = resolveMigration(deps, target);
-  if (!ref) {
+  const environment = ref && writableEnvironment(deps, 'run up');
+  if (!ref || !environment) {
     return undefined;
   }
   const name = shortName(ref.file);
-  const output = await execute(deps, ref.project, ['up', ref.file], `up ${name}`);
+  if (!(await confirmRemoteWrite(deps, environment, ref.project, `Apply ${name}`))) {
+    return undefined;
+  }
+  const output = await execute(deps, ref.project, environment, ['up', ref.file], `up ${name}`);
   if (!output) {
     return undefined;
   }
@@ -51,7 +89,7 @@ async function runUp(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | u
   if (applied) {
     void vscode.window
       .showInformationMessage(
-        `Applied on ${LOCAL} in ${formatDuration(applied.duration ?? 0)}: ${name} · batch ${applied.batch ?? '?'}`,
+        `Applied on ${environment.name} in ${formatDuration(applied.duration ?? 0)}: ${name} · batch ${applied.batch ?? '?'}`,
         'Run down',
       )
       .then((choice) => {
@@ -62,7 +100,7 @@ async function runUp(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | u
   } else {
     const skipped = results.find((result) => result.file === ref.file);
     void vscode.window.showInformationMessage(
-      `${name} is already applied on ${LOCAL}${skipped?.reason ? ` (${skipped.reason})` : ''}, so nothing ran.`,
+      `${name} is already applied on ${environment.name}${skipped?.reason ? ` (${skipped.reason})` : ''}, so nothing ran.`,
     );
   }
   return results;
@@ -71,22 +109,28 @@ async function runUp(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | u
 /** Run up for every pending migration of a project */
 async function runUpAll(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | undefined> {
   const project = await resolveProject(deps, target);
-  if (!project) {
+  const environment = project && writableEnvironment(deps, 'apply');
+  if (!project || !environment) {
     return undefined;
   }
-  const output = await execute(deps, project, ['up'], 'up');
+  if (!(await confirmRemoteWrite(deps, environment, project, 'Apply every pending migration'))) {
+    return undefined;
+  }
+  const output = await execute(deps, project, environment, ['up'], 'up');
   if (!output) {
     return undefined;
   }
   const results = parseRunResults(output.value, 'up');
   const applied = results.filter((result) => result.status === 'applied');
   if (applied.length === 0) {
-    void vscode.window.showInformationMessage(`Nothing to apply on ${LOCAL}: it's up to date.`);
+    void vscode.window.showInformationMessage(
+      `Nothing to apply on ${environment.name}: it's up to date.`,
+    );
   } else {
     const total = applied.reduce((sum, result) => sum + (result.duration ?? 0), 0);
     const batch = applied[0]?.batch;
     void vscode.window.showInformationMessage(
-      `Applied ${applied.length} on ${LOCAL} in ${formatDuration(total)}${batch === undefined ? '' : ` · batch ${batch}`}`,
+      `Applied ${applied.length} on ${environment.name} in ${formatDuration(total)}${batch === undefined ? '' : ` · batch ${batch}`}`,
     );
   }
   return results;
@@ -95,30 +139,32 @@ async function runUpAll(deps: Deps, target: unknown): Promise<Wire<RunResult>[] 
 /** Roll back one applied migration file, after a modal confirmation */
 async function runDown(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | undefined> {
   const ref = resolveMigration(deps, target);
-  if (!ref) {
+  const environment = ref && writableEnvironment(deps, 'rolling back');
+  if (!ref || !environment) {
     return undefined;
   }
   const name = shortName(ref.file);
   const confirmed = await deps.confirm(
-    `Roll back ${name} on ${LOCAL}?`,
-    `This runs its down() against ${databaseLabel(ref.project.config)}. Afterwards it shows as pending.`,
+    `Roll back ${name} on ${environment.name}?`,
+    `This runs its down() against ${databaseLabel(ref.project, environment.name)}. Afterwards it shows as pending.`,
     'Run down',
   );
   if (!confirmed) {
     return undefined;
   }
-  return downOutcome(deps, ref.project, ref.file, ['down', ref.file]);
+  return downOutcome(deps, ref.project, environment, ref.file, ['down', ref.file]);
 }
 
 /** Run `args` (a down) and report what it reverted */
 async function downOutcome(
   deps: Deps,
   project: ProjectSnapshot,
+  environment: Environment,
   file: string,
   args: string[],
 ): Promise<Wire<RunResult>[] | undefined> {
   const name = shortName(file);
-  const output = await execute(deps, project, args, `down ${name}`);
+  const output = await execute(deps, project, environment, args, `down ${name}`);
   if (!output) {
     return undefined;
   }
@@ -127,7 +173,7 @@ async function downOutcome(
   if (reverted) {
     void vscode.window
       .showInformationMessage(
-        `Rolled back on ${LOCAL} in ${formatDuration(reverted.duration ?? 0)}: ${name}. It's pending again.`,
+        `Rolled back on ${environment.name} in ${formatDuration(reverted.duration ?? 0)}: ${name}. It's pending again.`,
         'Run up',
       )
       .then((choice) => {
@@ -142,19 +188,20 @@ async function downOutcome(
 /** Roll back and re-apply one migration file, after a modal confirmation */
 async function runRedo(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | undefined> {
   const ref = resolveMigration(deps, target);
-  if (!ref) {
+  const environment = ref && writableEnvironment(deps, 'redo');
+  if (!ref || !environment) {
     return undefined;
   }
   const name = shortName(ref.file);
   const confirmed = await deps.confirm(
-    `Redo ${name} on ${LOCAL}?`,
-    `This runs its down(), then its up() again, against ${databaseLabel(ref.project.config)}.`,
+    `Redo ${name} on ${environment.name}?`,
+    `This runs its down(), then its up() again, against ${databaseLabel(ref.project, environment.name)}.`,
     'Redo',
   );
   if (!confirmed) {
     return undefined;
   }
-  const output = await execute(deps, ref.project, ['redo', ref.file], `redo ${name}`);
+  const output = await execute(deps, ref.project, environment, ['redo', ref.file], `redo ${name}`);
   if (!output) {
     return undefined;
   }
@@ -162,14 +209,15 @@ async function runRedo(deps: Deps, target: unknown): Promise<Wire<RunResult>[] |
   const applied = results.find((result) => result.status === 'applied');
   if (applied) {
     void vscode.window.showInformationMessage(
-      `Redid ${name} on ${LOCAL}: rolled back, then applied in ${formatDuration(applied.duration ?? 0)} · batch ${applied.batch ?? '?'}`,
+      `Redid ${name} on ${environment.name}: rolled back, then applied in ${formatDuration(applied.duration ?? 0)} · batch ${applied.batch ?? '?'}`,
     );
   }
   return results;
 }
 
-/** Preview what `up` would apply, for one file or the whole project */
-async function dryRun(deps: Deps, target: unknown): Promise<Wire<StatusRow>[] | undefined> {
+/** Preview what `up` would apply, for one file or the whole project. Allowed everywhere */
+async function dryRun(deps: Deps, target: unknown): Promise<WireStatusRow[] | undefined> {
+  const environment = currentEnvironment(deps);
   let project: ProjectSnapshot | undefined;
   let args: string[];
   if (targetsFile(target) || (target === undefined && isMigrationEditorOpen(deps))) {
@@ -186,7 +234,14 @@ async function dryRun(deps: Deps, target: unknown): Promise<Wire<StatusRow>[] | 
   if (!project) {
     return undefined;
   }
-  const output = await execute(deps, project, args, 'dry run', vscode.ProgressLocation.Window);
+  const output = await execute(
+    deps,
+    project,
+    environment,
+    args,
+    'dry run',
+    vscode.ProgressLocation.Window,
+  );
   if (!output) {
     return undefined;
   }
@@ -199,11 +254,11 @@ async function dryRun(deps: Deps, target: unknown): Promise<Wire<StatusRow>[] | 
   let message: string;
   if (wouldApply.length > 0) {
     const names = wouldApply.map((row) => shortName(row.file));
-    message = `Dry run on ${LOCAL}: up would apply ${wouldApply.length}: ${listNames(names)}. Nothing ran.`;
+    message = `Dry run on ${environment.name}: up would apply ${wouldApply.length}: ${listNames(names)}. Nothing ran.`;
   } else if (first) {
-    message = `Dry run on ${LOCAL}: ${shortName(first.file)} is already applied, so up would skip it.`;
+    message = `Dry run on ${environment.name}: ${shortName(first.file)} is already applied, so up would skip it.`;
   } else {
-    message = `Dry run on ${LOCAL}: nothing to apply.`;
+    message = `Dry run on ${environment.name}: nothing to apply.`;
   }
   void vscode.window.showInformationMessage(message, 'Show output').then((choice) => {
     if (choice === 'Show output') {
@@ -216,53 +271,62 @@ async function dryRun(deps: Deps, target: unknown): Promise<Wire<StatusRow>[] | 
 /** Release a held migration lock, after a modal confirmation */
 async function unlock(deps: Deps, target: unknown): Promise<UnlockResult | undefined> {
   const project = await resolveProject(deps, target);
-  if (!project) {
+  const environment = project && writableEnvironment(deps, 'releasing the lock');
+  if (!project || !environment) {
     return undefined;
   }
   const confirmed = await deps.confirm(
-    `Release the migration lock on ${LOCAL}?`,
+    `Release the migration lock on ${environment.name}?`,
     'Only do this when the run holding it has really stopped (mmk named its host and pid). Releasing a live lock lets two runs change the database at once.',
     'Release lock',
   );
   if (!confirmed) {
     return undefined;
   }
-  const output = await execute(deps, project, ['unlock', '--yes'], 'unlock');
+  const output = await execute(deps, project, environment, ['unlock', '--yes'], 'unlock');
   if (!output) {
     return undefined;
   }
   const result = parseUnlockResult(output.value);
   void vscode.window.showInformationMessage(
     result.holder
-      ? `Released the lock on ${LOCAL} held by ${result.holder.executedBy} on ${result.holder.host} (pid ${result.holder.pid}).`
-      : `No migration lock was held on ${LOCAL}.`,
+      ? `Released the lock on ${environment.name} held by ${result.holder.executedBy} on ${result.holder.host} (pid ${result.holder.pid}).`
+      : `No migration lock was held on ${environment.name}.`,
   );
   return result;
 }
 
 /**
- * Run an mmk command in a project with progress, and report a failure to the user. Returns
- * mmk's output, or undefined when it failed (already reported).
+ * Run an mmk command in a project on an environment with progress, and report a failure to the
+ * user. Returns mmk's output, or undefined when it failed (already reported).
  */
 async function execute(
   deps: Deps,
   project: ProjectSnapshot,
+  environment: Environment,
   args: string[],
   label: string,
   location: vscode.ProgressLocation = vscode.ProgressLocation.Notification,
 ): Promise<JsonOutput | undefined> {
   try {
-    return await vscode.window.withProgress({ location, title: `mmk: ${label} on ${LOCAL}…` }, () =>
-      deps.store.run(project.dir, args, label),
+    return await vscode.window.withProgress(
+      { location, title: `mmk: ${label} on ${environment.name}…` },
+      () => deps.store.run(project.dir, args, label, environment.name),
     );
   } catch (error) {
-    reportFailure(deps, project, args, error);
+    reportFailure(deps, project, environment, args, error);
     return undefined;
   }
 }
 
 /** Tell the user what went wrong, in mmk's words, with the next step as a button */
-function reportFailure(deps: Deps, project: ProjectSnapshot, args: string[], error: unknown): void {
+function reportFailure(
+  deps: Deps,
+  project: ProjectSnapshot,
+  environment: Environment,
+  args: string[],
+  error: unknown,
+): void {
   if (error instanceof StoreError) {
     void vscode.window.showWarningMessage(error.message);
     return;
@@ -280,7 +344,7 @@ function reportFailure(deps: Deps, project: ProjectSnapshot, args: string[], err
     deps.log.info(`  ran before it stopped: ${result.file} → ${result.status}`);
   }
 
-  if (code === 'LOCK_ALREADY_HELD') {
+  if (code === 'LOCK_ALREADY_HELD' && !environment.readOnly) {
     void vscode.window.showErrorMessage(error.message, 'Unlock…').then((choice) => {
       if (choice === 'Unlock…') {
         void vscode.commands.executeCommand('mmk.unlock', { dir: project.dir });
@@ -296,12 +360,12 @@ function reportFailure(deps: Deps, project: ProjectSnapshot, args: string[], err
         return;
       }
       const confirmed = await deps.confirm(
-        `Roll back ${shortName(file)} anyway?`,
+        `Roll back ${shortName(file)} on ${environment.name} anyway?`,
         "The file changed after it ran, so its down() may not undo what its up() did. This is mmk's --force.",
         'Roll back anyway',
       );
       if (confirmed) {
-        await downOutcome(deps, project, file, ['down', file, '--force', '--yes']);
+        await downOutcome(deps, project, environment, file, ['down', file, '--force', '--yes']);
       }
     });
     return;

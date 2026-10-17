@@ -3,6 +3,7 @@ import type { MigrationExtension } from 'mongo-migrate-kit';
 import * as vscode from 'vscode';
 import { MmkCommandError } from '../mmk/cli.js';
 import { type ProjectConfig, parseCreateResult } from '../mmk/contract.js';
+import { LOCAL_ENVIRONMENT } from '../mmk/environments.js';
 import { previewFileName } from '../mmk/naming.js';
 import { StoreError } from '../mmk/store.js';
 import { type Deps, resolveProject } from './context.js';
@@ -63,6 +64,8 @@ async function createMigration(deps: Deps, args: CreateArgs = {}): Promise<strin
           project.dir,
           ['create', answer.name, `--${answer.extension}`],
           `create ${answer.name}`,
+          // create writes a file and never connects, so it needs no environment's connection
+          LOCAL_ENVIRONMENT,
         ),
     );
     created = parseCreateResult(output.value).path;

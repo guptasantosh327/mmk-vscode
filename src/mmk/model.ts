@@ -1,22 +1,21 @@
-import type { StatusRow } from 'mongo-migrate-kit';
-import type { Wire } from './contract.js';
+import type { WireStatusRow } from './contract.js';
 
 /** One batch of applied migrations, newest file first */
 export interface BatchGroup {
   batch: number;
   /** When the batch's newest migration was applied; null when mmk reported no time */
   appliedAt: Date | null;
-  rows: Wire<StatusRow>[];
+  rows: WireStatusRow[];
 }
 
 /** The sidebar's groups, built only from what `mmk status --json` reported */
 export interface StatusModel {
   /** `status: 'pending'`, in mmk's order */
-  pending: Wire<StatusRow>[];
+  pending: WireStatusRow[];
   /** Applied, but mmk's checksum verdict says the file changed since (`checksumOk: false`) */
-  edited: Wire<StatusRow>[];
+  edited: WireStatusRow[];
   /** Applied before this repo had a namespace (`unadopted`): needs `mmk namespace adopt` */
-  unadopted: Wire<StatusRow>[];
+  unadopted: WireStatusRow[];
   /** Applied migrations grouped by batch, newest batch first */
   batches: BatchGroup[];
   /** Number of applied migrations across all batches */
@@ -24,11 +23,11 @@ export interface StatusModel {
 }
 
 /** Group status rows for the sidebar. Every verdict comes from mmk's row as is */
-export function buildStatusModel(rows: readonly Wire<StatusRow>[]): StatusModel {
-  const pending: Wire<StatusRow>[] = [];
-  const edited: Wire<StatusRow>[] = [];
-  const unadopted: Wire<StatusRow>[] = [];
-  const byBatch = new Map<number, Wire<StatusRow>[]>();
+export function buildStatusModel(rows: readonly WireStatusRow[]): StatusModel {
+  const pending: WireStatusRow[] = [];
+  const edited: WireStatusRow[] = [];
+  const unadopted: WireStatusRow[] = [];
+  const byBatch = new Map<number, WireStatusRow[]>();
 
   for (const row of rows) {
     if (row.unadopted) {

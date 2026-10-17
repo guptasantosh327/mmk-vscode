@@ -1,8 +1,8 @@
 import * as path from 'node:path';
-import type { StatusRow } from 'mongo-migrate-kit';
 import * as vscode from 'vscode';
-import { type Deps, LOCAL, databaseLabel, relativeDir } from '../commands/context.js';
-import type { Wire } from '../mmk/contract.js';
+import { type Deps, databaseLabel, relativeDir } from '../commands/context.js';
+import type { WireStatusRow } from '../mmk/contract.js';
+import type { Environment } from '../mmk/environments.js';
 import {
   type BatchGroup,
   type StatusModel,
@@ -26,14 +26,24 @@ type GroupKind = 'pending' | 'edited' | 'unadopted' | 'applied';
 export type SidebarNode =
   | { kind: 'project'; dir: string }
   | { kind: 'env'; dir: string }
-  | { kind: 'notice'; dir: string; id: string; text: string; detail?: string; tone: Tone }
+  | {
+      kind: 'notice';
+      dir: string;
+      id: string;
+      text: string;
+      detail?: string;
+      tone: Tone;
+      /** A command the row runs when clicked, e.g. to set an environment up */
+      command?: string;
+      args?: unknown[];
+    }
   | { kind: 'group'; dir: string; group: GroupKind }
   | { kind: 'batch'; dir: string; batch: number; latest: boolean }
   | { kind: 'older'; dir: string }
   | { kind: 'migration'; dir: string; file: string; group: GroupKind }
   | { kind: 'action'; dir: string; action: 'upAll' | 'dryRun' };
 
-type Tone = 'loading' | 'error' | 'ok' | 'running';
+type Tone = 'loading' | 'error' | 'ok' | 'running' | 'locked' | 'setup';
 
 /** The "mmk: Migrations" tree (design A2): environment, pending, edited, applied by batch */
 export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
@@ -83,24 +93,25 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
   getTreeItem(node: SidebarNode): vscode.TreeItem {
     const project = this.deps.store.snapshot(node.dir);
     const model = project?.rows ? buildStatusModel(project.rows) : undefined;
+    const environment = this.deps.store.selected();
     const item = (() => {
       switch (node.kind) {
         case 'project':
           return projectItem(node.dir, project);
         case 'env':
-          return envItem(project);
+          return envItem(project, environment);
         case 'notice':
           return noticeItem(node);
         case 'group':
-          return groupItem(node.group, model);
+          return groupItem(node.group, model, environment);
         case 'batch':
           return batchItem(node, model);
         case 'older':
           return olderItem(model);
         case 'migration':
-          return migrationItem(node, project, this.deps.created);
+          return migrationItem(node, project, this.deps.created, environment);
         case 'action':
-          return actionItem(node, model);
+          return actionItem(node, model, environment);
       }
     })();
     item.id = nodeId(node);
@@ -112,16 +123,49 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
     if (project.state.kind !== 'ready') {
       return [notice(dir, 'problem', project.state.message, 'error')];
     }
+    const environment = this.deps.store.selected();
+    const name = environment.name;
     const nodes: SidebarNode[] = [{ kind: 'env', dir }];
+    if (environment.readOnly) {
+      nodes.push(
+        notice(
+          dir,
+          'read-only',
+          `Read-only. Run and roll back are turned off for ${name}; deploys go through CI.`,
+          'locked',
+        ),
+      );
+    }
     if (project.running) {
-      nodes.push(notice(dir, 'running', `Running ${project.running} on ${LOCAL}…`, 'running'));
+      nodes.push(
+        notice(
+          dir,
+          'running',
+          `Running ${project.running} on ${project.runningOn ?? name}…`,
+          'running',
+        ),
+      );
+    }
+    if (project.environments[name]?.connected === false) {
+      nodes.push({
+        ...notice(
+          dir,
+          'not-set-up',
+          `${name} isn't set up for this project`,
+          'setup',
+          'Click to add its connection string. It is kept in the OS keychain.',
+        ),
+        command: 'mmk.editEnvironment',
+        args: [name],
+      } as SidebarNode);
+      return nodes;
     }
     if (project.error) {
       nodes.push(
         notice(
           dir,
           'error',
-          `Couldn't read status on ${LOCAL}`,
+          `Couldn't read status on ${name}`,
           'error',
           project.error.code
             ? `${project.error.code}: ${project.error.message}`
@@ -131,7 +175,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
       return nodes;
     }
     if (!project.rows) {
-      nodes.push(notice(dir, 'loading', `Reading status on ${LOCAL}…`, 'loading'));
+      nodes.push(notice(dir, 'loading', `Reading status on ${name}…`, 'loading'));
       return nodes;
     }
     const model = buildStatusModel(project.rows);
@@ -152,13 +196,16 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
     group: GroupKind,
   ): SidebarNode[] {
     const { dir } = project;
+    const environment = this.deps.store.selected();
     switch (group) {
       case 'pending':
         return model.pending.length === 0
-          ? [notice(dir, 'none-pending', `Nothing pending on ${LOCAL}`, 'ok')]
+          ? [notice(dir, 'none-pending', `Nothing pending on ${environment.name}`, 'ok')]
           : [
               ...migrationNodes(dir, model.pending, 'pending'),
-              { kind: 'action', dir, action: 'upAll' },
+              ...(environment.readOnly
+                ? []
+                : [{ kind: 'action', dir, action: 'upAll' } as SidebarNode]),
               { kind: 'action', dir, action: 'dryRun' },
             ];
       case 'edited':
@@ -167,7 +214,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
         return migrationNodes(dir, model.unadopted, 'unadopted');
       case 'applied': {
         if (model.batches.length === 0) {
-          return [notice(dir, 'none-applied', `Nothing applied on ${LOCAL} yet`, 'ok')];
+          return [notice(dir, 'none-applied', `Nothing applied on ${environment.name} yet`, 'ok')];
         }
         const recent = model.batches
           .slice(0, RECENT_BATCHES)
@@ -188,7 +235,7 @@ function batchNode(project: ProjectSnapshot, group: BatchGroup, latest: boolean)
 
 function migrationNodes(
   dir: string,
-  rows: readonly Wire<StatusRow>[],
+  rows: readonly WireStatusRow[],
   group: GroupKind,
 ): SidebarNode[] {
   return rows.map((row) => ({ kind: 'migration', dir, file: row.file, group }));
@@ -227,12 +274,30 @@ function projectItem(dir: string, project: ProjectSnapshot | undefined): vscode.
   return item;
 }
 
-function envItem(project: ProjectSnapshot | undefined): vscode.TreeItem {
-  const item = new vscode.TreeItem(LOCAL);
-  item.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.blue'));
-  item.description = databaseLabel(project?.config ?? null);
+/** The theme color of an environment's dot: blue for the default, amber or red otherwise */
+function environmentColor(environment: Environment): vscode.ThemeColor {
+  return new vscode.ThemeColor(
+    environment.color === 'error'
+      ? 'testing.iconFailed'
+      : environment.color === 'warning'
+        ? 'list.warningForeground'
+        : 'charts.blue',
+  );
+}
+
+function envItem(project: ProjectSnapshot | undefined, environment: Environment): vscode.TreeItem {
+  const item = new vscode.TreeItem(environment.name);
+  item.iconPath = new vscode.ThemeIcon(
+    environment.readOnly ? 'lock' : 'circle-filled',
+    environmentColor(environment),
+  );
+  const database = databaseLabel(project, environment.name);
+  item.description = database;
+  const source = environment.local
+    ? "set by this project's mmk config and `.env`"
+    : 'from the connection string in your OS keychain';
   item.tooltip = new vscode.MarkdownString(
-    `**${LOCAL}**: records come from ${databaseLabel(project?.config ?? null)}, set by this project's mmk config and \`.env\`. Files come from your working tree.`,
+    `**${environment.name}**${environment.readOnly ? ' (read-only)' : ''}: records come from ${database}, ${source}. Files come from your working tree. Click to switch environments.`,
   );
   item.command = { command: 'mmk.selectEnvironment', title: 'Select environment' };
   item.contextValue = 'mmk.env';
@@ -246,24 +311,32 @@ function noticeItem(node: Extract<SidebarNode, { kind: 'notice' }>): vscode.Tree
     running: new vscode.ThemeIcon('sync~spin'),
     error: new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed')),
     ok: new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed')),
+    locked: new vscode.ThemeIcon('lock'),
+    setup: new vscode.ThemeIcon('key', new vscode.ThemeColor('list.warningForeground')),
   };
   item.iconPath = icons[node.tone];
   if (node.detail !== undefined) {
     item.description = node.detail.split('\n')[0] ?? '';
     item.tooltip = node.detail;
   }
-  if (node.tone === 'error') {
+  if (node.command !== undefined) {
+    item.command = { command: node.command, title: node.text, arguments: node.args ?? [] };
+  } else if (node.tone === 'error') {
     item.command = { command: 'mmk.showOutput', title: 'Show output' };
   }
   return item;
 }
 
-function groupItem(group: GroupKind, model: StatusModel | undefined): vscode.TreeItem {
+function groupItem(
+  group: GroupKind,
+  model: StatusModel | undefined,
+  environment: Environment,
+): vscode.TreeItem {
   const labels: Record<GroupKind, string> = {
-    pending: `Pending on ${LOCAL}`,
+    pending: `Pending on ${environment.name}`,
     edited: 'Edited after it ran',
     unadopted: 'Applied before the namespace',
-    applied: `Applied on ${LOCAL}`,
+    applied: `Applied on ${environment.name}`,
   };
   const counts: Record<GroupKind, number> = {
     pending: model?.pending.length ?? 0,
@@ -273,8 +346,11 @@ function groupItem(group: GroupKind, model: StatusModel | undefined): vscode.Tre
   };
   const item = new vscode.TreeItem(labels[group], vscode.TreeItemCollapsibleState.Expanded);
   item.description = String(counts[group]);
+  // `.ro` keeps the write actions (menus match the exact value) off a read-only environment.
   item.contextValue =
-    group === 'pending' && counts.pending > 0 ? 'mmk.group.pending' : `mmk.group.${group}`;
+    group === 'pending' && counts.pending > 0
+      ? `mmk.group.pending${environment.readOnly ? '.ro' : ''}`
+      : `mmk.group.${group}`;
   if (group === 'edited') {
     item.iconPath = new vscode.ThemeIcon(
       'warning',
@@ -323,6 +399,7 @@ function migrationItem(
   node: Extract<SidebarNode, { kind: 'migration' }>,
   project: ProjectSnapshot | undefined,
   created: Set<string>,
+  environment: Environment,
 ): vscode.TreeItem {
   const row = project?.rows?.find((candidate) => candidate.file === node.file);
   const shown = displayName(node.file);
@@ -350,29 +427,33 @@ function migrationItem(
     item.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
   }
 
-  item.tooltip = migrationTooltip(node.file, row);
+  item.tooltip = migrationTooltip(node.file, row, environment.name);
   if (file && !row?.fileMissing) {
     item.resourceUri = vscode.Uri.file(file);
     item.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file)] };
   }
   const applied = row?.status === 'applied' && !row.unadopted;
-  item.contextValue = `mmk.migration.${applied ? 'applied' : row?.unadopted ? 'unadopted' : 'pending'}${row?.fileMissing ? '.nofile' : ''}`;
+  item.contextValue = `mmk.migration.${applied ? 'applied' : row?.unadopted ? 'unadopted' : 'pending'}${row?.fileMissing ? '.nofile' : ''}${environment.readOnly ? '.ro' : ''}`;
   return item;
 }
 
-function migrationTooltip(file: string, row: Wire<StatusRow> | undefined): vscode.MarkdownString {
+function migrationTooltip(
+  file: string,
+  row: WireStatusRow | undefined,
+  environment: string,
+): vscode.MarkdownString {
   const lines = [`**${file}**`, ''];
   if (row?.description) {
     lines.push(row.description, '');
   }
   if (row?.status === 'applied') {
     const when = row.appliedAt ? new Date(row.appliedAt).toLocaleString() : 'unknown time';
-    lines.push(`Applied on ${LOCAL} in batch ${row.batch ?? '?'}, ${when}`);
+    lines.push(`Applied on ${environment} in batch ${row.batch ?? '?'}, ${when}`);
     if (row.checksumOk === false) {
       lines.push('', '$(warning) Edited after it ran: mmk down will refuse to roll it back.');
     }
   } else {
-    lines.push(`Pending on ${LOCAL}`);
+    lines.push(`Pending on ${environment}`);
   }
   if (row?.author) {
     lines.push('', `Author: ${row.author}`);
@@ -387,15 +468,18 @@ function migrationTooltip(file: string, row: Wire<StatusRow> | undefined): vscod
 function actionItem(
   node: Extract<SidebarNode, { kind: 'action' }>,
   model: StatusModel | undefined,
+  environment: Environment,
 ): vscode.TreeItem {
   if (node.action === 'upAll') {
     const count = model?.pending.length ?? 0;
-    const item = new vscode.TreeItem(`Apply all ${count} on ${LOCAL}`);
+    const item = new vscode.TreeItem(`Apply all ${count} on ${environment.name}`);
     item.iconPath = new vscode.ThemeIcon('run-all');
     item.command = { command: 'mmk.upAll', title: 'Apply all', arguments: [{ dir: node.dir }] };
     return item;
   }
-  const item = new vscode.TreeItem('Dry run');
+  const item = new vscode.TreeItem(
+    environment.local ? 'Dry run' : `Dry run on ${environment.name}`,
+  );
   item.iconPath = new vscode.ThemeIcon('eye');
   item.command = { command: 'mmk.dryRun', title: 'Dry run', arguments: [{ dir: node.dir }] };
   return item;

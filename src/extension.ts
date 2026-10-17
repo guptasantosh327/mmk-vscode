@@ -1,13 +1,18 @@
 import * as vscode from 'vscode';
 import { type Deps, modalConfirm } from './commands/context.js';
 import { registerCreateCommand } from './commands/create.js';
+import { EnvironmentRegistry } from './commands/environment-registry.js';
+import { registerEnvironmentCommands } from './commands/environments.js';
 import { registerMiscCommands } from './commands/misc.js';
 import { registerRunCommands } from './commands/run.js';
+import type { Connection } from './mmk/environments.js';
 import { type Logger, createLogger } from './mmk/log.js';
 import { discoverProjects } from './mmk/project.js';
 import { MmkStore, type ProjectSnapshot } from './mmk/store.js';
+import { BranchWatch } from './views/branch-watch.js';
 import { RunLinksProvider } from './views/codelens.js';
 import { MigrationDecorations } from './views/decorations.js';
+import { registerMatrix } from './views/matrix/panel.js';
 import { SIDEBAR_VIEW, type SidebarNode, SidebarProvider } from './views/sidebar.js';
 import { StatusBar } from './views/statusbar.js';
 
@@ -20,6 +25,10 @@ export interface MmkTestApi {
   sidebar(): string[];
   /** Answer confirmation modals with `answer` instead of showing them */
   setConfirm(answer: (message: string) => boolean): void;
+  /** The environments registry (settings and keychain) */
+  environments: EnvironmentRegistry;
+  /** Report migrations from other branches as after a checkout; returns the messages */
+  checkBranch(root: string, branch: string | null): Promise<string[]>;
 }
 
 /**
@@ -29,8 +38,21 @@ export interface MmkTestApi {
 export function activate(context: vscode.ExtensionContext): MmkTestApi | undefined {
   const channel = vscode.window.createOutputChannel('mmk', { log: true });
   const log = createLogger(channel);
-  const store = new MmkStore({ log });
-  const deps: Deps = { store, log, channel, confirm: modalConfirm, created: new Set() };
+  // The store asks the registry for stored connections; it's only called after both exist.
+  const store: MmkStore = new MmkStore({
+    log,
+    connection: (dir: string, environment: string): Promise<Connection | null> =>
+      environments.connection(dir, environment),
+  });
+  const environments: EnvironmentRegistry = new EnvironmentRegistry(context, store, log);
+  const deps: Deps = {
+    store,
+    environments,
+    log,
+    channel,
+    confirm: modalConfirm,
+    created: new Set(),
+  };
 
   const sidebar = new SidebarProvider(deps);
   const runLinks = new RunLinksProvider(deps);
@@ -38,6 +60,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
   const statusBar = new StatusBar(deps);
   const watchers = new ProjectWatchers(store);
   const contextKeys = new ContextKeys();
+  const branchWatch = new BranchWatch(deps);
 
   // Snapshots change several times per read; redraw once per burst.
   let redrawScheduled = false;
@@ -54,7 +77,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
       decorations.refresh();
       statusBar.update();
       watchers.sync(projects);
-      contextKeys.update(projects);
+      contextKeys.update(projects, store.selected().readOnly);
     }, 30);
   };
 
@@ -92,6 +115,8 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     channel,
     statusBar,
     watchers,
+    environments,
+    branchWatch,
     configFiles,
     { dispose: () => store.dispose() },
     store.onDidChange(scheduleRedraw),
@@ -109,6 +134,8 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     vscode.window.registerFileDecorationProvider(decorations),
     ...registerRunCommands(deps),
     ...registerMiscCommands(deps),
+    ...registerEnvironmentCommands(deps),
+    ...registerMatrix(deps, context.extensionUri),
     registerCreateCommand(deps),
     vscode.commands.registerCommand('mmk.refresh', async () => {
       await rediscover();
@@ -125,6 +152,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     }),
   );
 
+  environments.load();
   void rediscover();
 
   if (context.extensionMode !== vscode.ExtensionMode.Test) {
@@ -137,6 +165,8 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     setConfirm: (answer) => {
       deps.confirm = async (message) => answer(message);
     },
+    environments,
+    checkBranch: (root, branch) => branchWatch.checkAfterSwitch(root, branch),
   };
 }
 
@@ -235,8 +265,9 @@ class ContextKeys {
     this.set('mmk.discovered', true);
   }
 
-  update(projects: readonly ProjectSnapshot[]): void {
+  update(projects: readonly ProjectSnapshot[], readOnly: boolean): void {
     this.set('mmk.hasProject', projects.length > 0);
+    this.set('mmk.readOnly', readOnly);
     const only = projects.length === 1 ? projects[0] : undefined;
     this.set('mmk.problem', only && only.state.kind !== 'ready' ? only.state.kind : '');
   }

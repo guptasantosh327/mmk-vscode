@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import { type JsonOutput, type MmkInvocation, runMmkJson } from '../../src/mmk/cli.js';
+import { compareVersions, parseVersion } from '../../src/mmk/compat.js';
 import { locateMmk } from '../../src/mmk/locate.js';
 import { type ReadConfig, readProjectConfig } from '../../src/mmk/project-config.js';
 
@@ -37,6 +38,30 @@ export interface ContractProject {
   /** Add a migration file to this project */
   addMigration: (file: string, source: string) => void;
   cleanup: () => void;
+}
+
+/**
+ * The first mongo-migrate-kit release with the requests this extension made (R2, R3, R5, R9,
+ * R10, …), counting its pre-releases: a local build of it reports `1.6.0-dev.N`. Contract tests
+ * expect 1.5 behaviour below it and the new behaviour from it, so CI stays green on the pinned
+ * 1.5.0 while the requests are developed through an unreleased build. Once that release is
+ * pinned, delete the 1.5 branches.
+ */
+export const NEXT_MMK = '1.6.0-0';
+
+/** The version of the mongo-migrate-kit installed in node_modules (the pin, under `npm ci`) */
+export function installedMmkVersion(): string {
+  const manifest = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, 'node_modules/mongo-migrate-kit/package.json'), 'utf8'),
+  ) as { version: string };
+  return manifest.version;
+}
+
+/** True when the installed mmk is {@link NEXT_MMK} or later */
+export function hasNextMmk(): boolean {
+  const installed = parseVersion(installedMmkVersion());
+  const next = parseVersion(NEXT_MMK);
+  return installed !== null && next !== null && compareVersions(installed, next) >= 0;
 }
 
 /** The mongo-migrate-kit version package.json pins for these tests */

@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
-import { type Deps, LOCAL } from '../commands/context.js';
+import type { Deps } from '../commands/context.js';
 
-/** Explorer badges on migration files: `●` pending, `!` edited after it ran (mmk's verdicts) */
+/**
+ * Explorer badges on migration files: `●` pending on the selected environment, `!` edited after
+ * it ran (mmk's verdicts)
+ */
 export class MigrationDecorations implements vscode.FileDecorationProvider {
   private readonly changed = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
@@ -24,7 +27,7 @@ export class MigrationDecorations implements vscode.FileDecorationProvider {
     if (row.status === 'pending') {
       return new vscode.FileDecoration(
         '●',
-        `Pending on ${LOCAL} (mmk)`,
+        `Pending on ${this.deps.store.selected().name} (mmk)`,
         new vscode.ThemeColor('charts.blue'),
       );
     }

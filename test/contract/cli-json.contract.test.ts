@@ -1,4 +1,5 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname, userInfo } from 'node:os';
 import path from 'node:path';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -16,6 +17,8 @@ import {
   FIXTURE_AUTHOR,
   FIXTURE_FILES,
   createProject,
+  hasNextMmk,
+  installedMmkVersion,
   pinnedMmkVersion,
 } from './harness.js';
 
@@ -75,10 +78,10 @@ async function expectFailure(promise: Promise<unknown>): Promise<MmkCommandError
 describe(`mmk --version (pinned mongo-migrate-kit ${pinnedMmkVersion()})`, () => {
   const project = withProject('contract_version');
 
-  it('should print the pinned version, which the extension accepts', async () => {
+  it('should print the installed version (the pin, under npm ci), which the extension accepts', async () => {
     const printed = await runMmkVersion(project().invocation);
 
-    expect(printed).toBe(pinnedMmkVersion());
+    expect(printed).toBe(installedMmkVersion());
     expect(checkCompat(printed)).toEqual({ ok: true, version: printed });
   });
 
@@ -132,6 +135,11 @@ describe('status, list, dry-run, up, down, redo and create', () => {
   it('status: an applied row has its batch, time, duration, checksum verdict and author', async () => {
     const before = Date.now();
     const rows = parseStatusRows((await project().run(['status'])).value, 'status');
+    // R5 (the next mmk): the checksum recorded when it ran, the SHA-256 of the file's text.
+    const source = readFileSync(path.join(project().migrationsDir, CREATE_USERS), 'utf8');
+    const recorded = hasNextMmk()
+      ? { checksum: createHash('sha256').update(source).digest('hex') }
+      : {};
 
     expect(rows).toEqual([
       {
@@ -141,6 +149,7 @@ describe('status, list, dry-run, up, down, redo and create', () => {
         appliedAt: expect.any(String),
         duration: expect.any(Number),
         checksumOk: true,
+        ...recorded,
         description: 'Create the users collection',
         author: FIXTURE_AUTHOR,
       },
@@ -354,7 +363,7 @@ describe('error document', () => {
 describe('stdout from user code', () => {
   const project = withProject('contract_stdout');
 
-  it("up: a migration's console.log comes before the JSON, which still parses", async () => {
+  it("up: a migration's console.log never breaks the JSON, and isn't lost", async () => {
     project().addMigration(
       '20260106000000-noisy.js',
       `module.exports = {
@@ -368,7 +377,14 @@ describe('stdout from user code', () => {
 
     const output = await project().run(['up', '20260106000000-noisy.js']);
 
-    expect(output.otherStdout).toBe('Backfilled 3 users');
+    if (hasNextMmk()) {
+      // R9: in --json mode, mmk sends what user code prints to stderr.
+      expect(output.otherStdout).toBe('');
+      expect(output.stderr).toContain('Backfilled 3 users');
+    } else {
+      // 1.5 prints it on stdout before the document; the parser keeps it apart.
+      expect(output.otherStdout).toBe('Backfilled 3 users');
+    }
     expect(parseRunResults(output.value, 'up')).toEqual([
       {
         file: '20260106000000-noisy.js',

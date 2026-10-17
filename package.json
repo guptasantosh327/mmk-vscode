@@ -101,25 +101,25 @@
       },
       {
         "command": "mmk.up",
-        "title": "Run up on local",
+        "title": "Run up",
         "category": "mmk",
         "icon": "$(play)"
       },
       {
         "command": "mmk.upAll",
-        "title": "Apply all pending on local",
+        "title": "Apply all pending",
         "category": "mmk",
         "icon": "$(run-all)"
       },
       {
         "command": "mmk.down",
-        "title": "Run down on local",
+        "title": "Run down",
         "category": "mmk",
         "icon": "$(discard)"
       },
       {
         "command": "mmk.redo",
-        "title": "Redo on local",
+        "title": "Redo",
         "category": "mmk",
         "icon": "$(debug-restart)"
       },
@@ -143,14 +143,39 @@
       },
       {
         "command": "mmk.selectEnvironment",
-        "title": "Select environment",
-        "category": "mmk"
+        "title": "Select environment…",
+        "category": "mmk",
+        "icon": "$(server-environment)"
       },
       {
         "command": "mmk.showOutput",
         "title": "Show output",
         "category": "mmk",
         "icon": "$(output)"
+      },
+      {
+        "command": "mmk.compareEnvironments",
+        "title": "Compare all environments",
+        "category": "mmk",
+        "icon": "$(table)"
+      },
+      {
+        "command": "mmk.addEnvironment",
+        "title": "Add environment…",
+        "category": "mmk",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mmk.editEnvironment",
+        "title": "Edit environment…",
+        "category": "mmk",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "mmk.removeEnvironment",
+        "title": "Remove environment…",
+        "category": "mmk",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -161,24 +186,44 @@
           "group": "navigation@1"
         },
         {
+          "command": "mmk.compareEnvironments",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "navigation@2"
+        },
+        {
           "command": "mmk.refresh",
           "when": "view == mmk.migrations",
-          "group": "navigation@2"
+          "group": "navigation@3"
+        },
+        {
+          "command": "mmk.selectEnvironment",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "1_environments@1"
+        },
+        {
+          "command": "mmk.addEnvironment",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "1_environments@2"
+        },
+        {
+          "command": "mmk.editEnvironment",
+          "when": "view == mmk.migrations && mmk.hasProject",
+          "group": "1_environments@3"
         },
         {
           "command": "mmk.copyCliCommand",
           "when": "view == mmk.migrations && mmk.hasProject",
-          "group": "1_actions@1"
+          "group": "2_actions@1"
         },
         {
           "command": "mmk.unlock",
-          "when": "view == mmk.migrations && mmk.hasProject",
-          "group": "1_actions@2"
+          "when": "view == mmk.migrations && mmk.hasProject && !mmk.readOnly",
+          "group": "2_actions@2"
         },
         {
           "command": "mmk.showOutput",
           "when": "view == mmk.migrations",
-          "group": "2_output@1"
+          "group": "3_output@1"
         }
       ],
       "view/item/context": [
@@ -189,7 +234,7 @@
         },
         {
           "command": "mmk.dryRun",
-          "when": "view == mmk.migrations && viewItem == mmk.group.pending",
+          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.group\\.pending(\\.ro)?$/",
           "group": "inline@2"
         },
         {
@@ -204,7 +249,7 @@
         },
         {
           "command": "mmk.dryRun",
-          "when": "view == mmk.migrations && viewItem == mmk.migration.pending",
+          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.migration\\.pending(\\.ro)?$/",
           "group": "1_run@2"
         },
         {
@@ -224,8 +269,18 @@
         },
         {
           "command": "mmk.copyCliCommand",
-          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.migration\\.(pending|applied)$/",
+          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.migration\\.(pending|applied)(\\.ro)?$/",
           "group": "2_copy@1"
+        },
+        {
+          "command": "mmk.compareEnvironments",
+          "when": "view == mmk.migrations && viewItem == mmk.env",
+          "group": "inline@1"
+        },
+        {
+          "command": "mmk.selectEnvironment",
+          "when": "view == mmk.migrations && viewItem == mmk.env",
+          "group": "inline@2"
         }
       ],
       "commandPalette": [
@@ -235,19 +290,19 @@
         },
         {
           "command": "mmk.up",
-          "when": "mmk.hasProject"
+          "when": "mmk.hasProject && !mmk.readOnly"
         },
         {
           "command": "mmk.upAll",
-          "when": "mmk.hasProject"
+          "when": "mmk.hasProject && !mmk.readOnly"
         },
         {
           "command": "mmk.down",
-          "when": "mmk.hasProject"
+          "when": "mmk.hasProject && !mmk.readOnly"
         },
         {
           "command": "mmk.redo",
-          "when": "mmk.hasProject"
+          "when": "mmk.hasProject && !mmk.readOnly"
         },
         {
           "command": "mmk.dryRun",
@@ -255,7 +310,7 @@
         },
         {
           "command": "mmk.unlock",
-          "when": "mmk.hasProject"
+          "when": "mmk.hasProject && !mmk.readOnly"
         },
         {
           "command": "mmk.copyCliCommand",
@@ -263,6 +318,22 @@
         },
         {
           "command": "mmk.selectEnvironment",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.compareEnvironments",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.addEnvironment",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.editEnvironment",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.removeEnvironment",
           "when": "mmk.hasProject"
         }
       ]
@@ -275,6 +346,46 @@
           "default": "",
           "scope": "machine-overridable",
           "markdownDescription": "Path to the Node.js executable that runs `mmk`. Leave empty to use `node` from `PATH`, the same one your terminal uses."
+        },
+        "mmk.environments": {
+          "type": "array",
+          "default": [],
+          "scope": "window",
+          "markdownDescription": "Databases to compare your branch with, besides `local` (this project's own config and `.env`). Only names, read-only flags and colors go here: each connection string stays in the OS keychain. Add one with **mmk: Add environment…**.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$",
+                "patternErrorMessage": "Lowercase letters, digits, '.', '_' or '-', starting with a letter or digit (at most 32)",
+                "description": "The environment's name, e.g. staging or prod. `local` is always there."
+              },
+              "readOnly": {
+                "type": "boolean",
+                "default": true,
+                "markdownDescription": "Only `status`, `list` and `dry-run` run here. On unless set to `false`, except for `local`."
+              },
+              "color": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "warning",
+                  "error"
+                ],
+                "enumDescriptions": [
+                  "The default status bar background",
+                  "The warning background (staging by default)",
+                  "The error background (anything named like prod by default)"
+                ],
+                "description": "The status bar background while this environment is selected."
+              }
+            }
+          }
         }
       }
     }
@@ -312,5 +423,8 @@
   "overrides": {
     "diff": "^8.0.4",
     "serialize-javascript": "^7.0.6"
+  },
+  "dependencies": {
+    "@vscode/codicons": "0.0.45"
   }
 }

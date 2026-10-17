@@ -1,18 +1,17 @@
-import type { StatusRow } from 'mongo-migrate-kit';
 import { describe, expect, it } from 'vitest';
-import type { Wire } from '../../src/mmk/contract.js';
+import type { WireStatusRow } from '../../src/mmk/contract.js';
 import { buildStatusModel, formatDay, formatDuration, formatWhen } from '../../src/mmk/model.js';
 
 function applied(
   file: string,
   batch: number,
   appliedAt: string,
-  extra: Partial<Wire<StatusRow>> = {},
-): Wire<StatusRow> {
+  extra: Partial<WireStatusRow> = {},
+): WireStatusRow {
   return { file, status: 'applied', batch, appliedAt, duration: 10, checksumOk: true, ...extra };
 }
 
-function pending(file: string, extra: Partial<Wire<StatusRow>> = {}): Wire<StatusRow> {
+function pending(file: string, extra: Partial<WireStatusRow> = {}): WireStatusRow {
   return {
     file,
     status: 'pending',
