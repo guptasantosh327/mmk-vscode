@@ -29,6 +29,9 @@ const frame = (name, hold = 1800) => ask({ action: 'frame', name, hold });
 const type = (text) => ask({ action: 'type', text });
 const press = (key) => ask({ action: 'key', key });
 
+/** The scenes to play (MEDIA_SCENES, comma-separated); all of them by default */
+const scenes = (process.env.MEDIA_SCENES || 'local-workflow,environments,applied-edit').split(',');
+
 async function run() {
   const workspace = vscode.workspace.workspaceFolders[0].uri.fsPath;
   const migrations = path.join(workspace, 'migrations');
@@ -48,7 +51,10 @@ async function run() {
     if (line !== undefined) {
       const position = new vscode.Position(line, 0);
       editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenter,
+      );
     }
     return editor;
   };
@@ -72,22 +78,28 @@ async function run() {
   await clearNotifications();
 
   // ── A1 → A2 → A3: create, run up, see it applied ─────────────────────────────────────
-  await open('20261014103000-add-orders-region-field.js', 0);
-  await settle();
-  await frame('local-workflow/1');
-  const creating = exec('mmk.createMigration');
-  await sleep(800);
-  await type('add refunds collection');
-  await sleep(500);
-  await frame('local-workflow/2');
-  await press('Enter');
-  const created = await creating;
-  await settle();
-  const editor = await vscode.window.showTextDocument(vscode.Uri.file(created));
-  await editor.edit((edit) =>
-    edit.replace(
-      new vscode.Range(0, 0, editor.document.lineCount, 0),
-      `module.exports = {
+  if (scenes.includes('local-workflow')) await localWorkflow();
+  if (scenes.includes('environments')) await environments();
+  if (scenes.includes('applied-edit')) await appliedEdit();
+  await ask({ action: 'finish' });
+
+  async function localWorkflow() {
+    await open('20261014103000-add-orders-region-field.js', 0);
+    await settle();
+    await frame('local-workflow/1');
+    const creating = exec('mmk.createMigration');
+    await sleep(800);
+    await type('add refunds collection');
+    await sleep(500);
+    await frame('local-workflow/2');
+    await press('Enter');
+    const created = await creating;
+    await settle();
+    const editor = await vscode.window.showTextDocument(vscode.Uri.file(created));
+    await editor.edit((edit) =>
+      edit.replace(
+        new vscode.Range(0, 0, editor.document.lineCount, 0),
+        `module.exports = {
   description: 'Create the refunds collection',
   author: 'Asha Rao <asha@example.com>',
 
@@ -101,60 +113,66 @@ async function run() {
   },
 };
 `,
-    ),
-  );
-  await editor.document.save();
-  await settle();
-  await frame('local-workflow/3');
-  await exec('mmk.up', vscode.Uri.file(created));
-  await settle(800);
-  await frame('local-workflow/4', 3000);
-  await clearNotifications();
+      ),
+    );
+    await editor.document.save();
+    await settle();
+    await frame('local-workflow/3');
+    await exec('mmk.up', vscode.Uri.file(created));
+    await settle(800);
+    await frame('local-workflow/4', 3000);
+    await clearNotifications();
+  }
 
-  // ── C1: switch to prod (read-only) ────────────────────────────────────────────────────
-  await open('20261014103000-add-orders-region-field.js', 0);
-  const picking = exec('mmk.selectEnvironment');
-  await sleep(900);
-  await frame('environments/1', 2200);
-  await type('prod');
-  await sleep(300);
-  await press('Enter');
-  await picking;
-  await settle();
-  await frame('environments/2', 2600);
+  async function environments() {
+    // ── C1: switch to prod (read-only) ────────────────────────────────────────────────────
+    await open('20261014103000-add-orders-region-field.js', 0);
+    const picking = exec('mmk.selectEnvironment');
+    await sleep(900);
+    await frame('environments/1', 2200);
+    await type('prod');
+    await sleep(300);
+    await press('Enter');
+    await picking;
+    await settle();
+    await frame('environments/2', 2600);
 
-  // ── C2: the matrix ─────────────────────────────────────────────────────────────────────
-  await exec('mmk.compareEnvironments', { dir: workspace });
-  await settle(2500);
-  await frame('environments/3', 3500);
-  await exec('mmk.selectEnvironment', 'local');
-  await closeAll();
-  await clearNotifications();
+    // ── C2: the matrix ─────────────────────────────────────────────────────────────────────
+    await exec('mmk.compareEnvironments', { dir: workspace });
+    await settle(2500);
+    await frame('environments/3', 3500);
+    await exec('mmk.selectEnvironment', 'local');
+    await closeAll();
+    await clearNotifications();
+  }
 
-  // ── B1 → B2: edit an applied migration, then look at the version that ran ──────────────
-  const applied = await open('20261012090000-add-users-email-index.js', 4);
-  await settle();
-  await applied.edit((edit) =>
-    edit.insert(new vscode.Position(5, 0), "    await db.collection('users').createIndex({ createdAt: -1 });\n"),
-  );
-  await api.checkApplied(applied.document);
-  await sleep(1200);
-  await frame('applied-edit/1');
-  // The same warning in Problems (VS Code won't open a hover in a window that isn't focused).
-  await exec('workbench.actions.view.problems');
-  await sleep(1500);
-  await frame('applied-edit/2', 3500);
-  await exec('workbench.action.closePanel');
-  await vscode.window.showTextDocument(applied.document);
-  await exec('workbench.action.files.revert');
-  await closeAll();
-  await exec('mmk.showAppliedVersion', file('20261012091500-backfill-order-status.js'));
-  await sleep(2500);
-  await frame('applied-edit/3', 4000);
-  await closeAll();
-  await clearNotifications();
-
-  await ask({ action: 'finish' });
+  async function appliedEdit() {
+    // ── B1 → B2: edit an applied migration, then look at the version that ran ──────────────
+    const applied = await open('20261012090000-add-users-email-index.js', 4);
+    await settle();
+    await applied.edit((edit) =>
+      edit.insert(
+        new vscode.Position(5, 0),
+        "    await db.collection('users').createIndex({ createdAt: -1 });\n",
+      ),
+    );
+    await api.checkApplied(applied.document);
+    await sleep(1200);
+    await frame('applied-edit/1');
+    // The same warning in Problems (VS Code won't open a hover in a window that isn't focused).
+    await exec('workbench.actions.view.problems');
+    await sleep(1500);
+    await frame('applied-edit/2', 3500);
+    await exec('workbench.action.closePanel');
+    await vscode.window.showTextDocument(applied.document);
+    await exec('workbench.action.files.revert');
+    await closeAll();
+    await exec('mmk.showAppliedVersion', file('20261012091500-backfill-order-status.js'));
+    await sleep(2500);
+    await frame('applied-edit/3', 4000);
+    await closeAll();
+    await clearNotifications();
+  }
 }
 
 module.exports = { run };

@@ -45,7 +45,6 @@ export class AppliedProtection
   private readonly versions = new Map<string, AppliedVersion>();
   private readonly searching = new Set<string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly told = new Set<string>();
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly disposables: vscode.Disposable[] = [];
   /** Fires when an edited state changes, for run links and Explorer badges */
@@ -129,9 +128,7 @@ export class AppliedProtection
         : checksumOfBytes(disk);
     const verdict = judgeEdit(ref.project, this.deps.store.environments(), ref.file, textChecksum);
 
-    if (verdict.applied.length === 0 && verdict.checksumsMissing && document.isDirty) {
-      this.tellChecksumsMissing(ref.project.dir, ref.project.state);
-    }
+    // An mmk that reports no checksums (1.5) leaves nothing to compare with: stay quiet.
     if (verdict.edited.length === 0) {
       this.clear(document.uri);
       return;
@@ -232,17 +229,6 @@ export class AppliedProtection
     if (this.states.delete(uri.toString())) {
       this.changed.fire();
     }
-  }
-
-  private tellChecksumsMissing(dir: string, state: { kind: string; version?: string }): void {
-    if (this.told.has(dir)) {
-      return;
-    }
-    this.told.add(dir);
-    const version = state.kind === 'ready' && 'version' in state ? ` ${state.version}` : '';
-    void vscode.window.showInformationMessage(
-      `This migration has already run. mmk for VS Code can warn while you edit it, but mongo-migrate-kit${version} doesn't report the checksum each migration ran with. Update mongo-migrate-kit to get the warning.`,
-    );
   }
 
   /** The B1 hover over the changed lines */
@@ -393,7 +379,7 @@ async function showAppliedVersion(
   if (verdict.applied.length === 0) {
     void vscode.window.showInformationMessage(
       verdict.checksumsMissing
-        ? "This mongo-migrate-kit doesn't report the checksum each migration ran with, so the version that ran can't be found. Update mongo-migrate-kit."
+        ? "This project's mongo-migrate-kit doesn't report the checksum each migration ran with, so the version that ran can't be found."
         : `${path.basename(uri.fsPath)} hasn't run on any environment yet, so there's no applied version.`,
     );
     return undefined;

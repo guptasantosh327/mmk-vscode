@@ -5,8 +5,8 @@ All notable changes to this extension are documented here.
 ## 1.0.0 · unreleased
 
 The first release. (0.1.0 was prepared as a pre-release and never published.) It needs
-mongo-migrate-kit 1.5.0 or later; read-only database users and edit warnings need 1.6.0 or
-later.
+mongo-migrate-kit 1.5.0 or later. The applied-file warning and read-only database users switch on
+by themselves once the project has a mongo-migrate-kit release that supports them.
 
 ### Local workflow
 
@@ -47,7 +47,7 @@ later.
 - **After a branch switch**, local migrations whose files are on another branch are named, with
   the branch.
 
-### Applied-file protection
+### Applied-file protection (switches on with a newer mongo-migrate-kit)
 
 - **Edits to migrations that already ran** are caught while you type, before you save: a warning on
   the changed lines, a hover that says where it ran and what saving would do, a Problems entry, a

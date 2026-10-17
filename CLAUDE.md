@@ -10,12 +10,13 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** **Phases 3–6 built** (2026-10-17) on stacked branches `feat/environments` →
-  `feat/applied-file-protection` → `feat/rollback-tests` → `release/1.0`, none pushed. Phase 5
-  (rollback tests, lint) was built and then dropped on `release/1.0` at the owner's request. Green on
-  the pinned 1.5.0 *and* on a local build of the next mmk. What's left is the owner's: release
-  mongo-migrate-kit 1.6.0, pin it, and publish 1.0.0, in the order `docs/RELEASE.md` gives. Phase
-  2's 0.1.0 pre-release was never published; 1.0.0 is the first release.
+- **Current phase:** **1.0.0 ready to publish** (2026-10-18) on `release/1.0` (stacked on
+  `feat/environments` → `feat/applied-file-protection` → `feat/rollback-tests`), none pushed.
+  Phases 3, 4 and 6 are in; Phase 5 (rollback tests, lint) was built and then dropped at the
+  owner's request. **Release order (owner's decision):** the extension first, against
+  mongo-migrate-kit 1.5.0; mmk's next release later, after the owner tests it. On 1.5 the
+  applied-file warning and read-only database users stay off and switch on by themselves with an
+  mmk that has R5 / R3. `docs/RELEASE.md` has the steps.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
   branches in a throwaway clone, stamp it `1.6.0-dev.0`, `npm pack`, then
   `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in

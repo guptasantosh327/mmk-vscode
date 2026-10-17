@@ -41,21 +41,19 @@ whatever it shows, `npx mmk` says the same in a terminal.
 - **After a branch switch**, local migrations whose files are on another branch are named, with
   the branch.
 
-Give staging and prod a MongoDB user with only the `read` role: from mongo-migrate-kit 1.6.0, reading
-needs nothing more.
+**The database user for staging and prod:** mongo-migrate-kit 1.5 creates the changelog's index
+whenever it connects, even to read, so the user needs permission to write (for example
+`readWrite`). The extension still never runs a write command on a read-only environment.
 
-## Editing a migration that already ran
+## Coming with the next mongo-migrate-kit
 
-![Editing an applied migration, then opening the version that ran](media/readme/applied-edit.gif)
+These are built into the extension and switch on by themselves once your project has a
+mongo-migrate-kit release that supports them. Until then they stay off:
 
-As you type in a migration that has run, before you save, the changed lines get a warning that
-names where it ran and what saving would do: `mmk down` will refuse to roll it back, `mmk status`
-will mark it as changed, and nothing runs it again. The same warning is in Problems, on the file's
-badge and in its run link.
-
-**Show applied version** finds the commit whose version of the file has the checksum mmk recorded
-when it ran, and opens it next to yours. **Restore applied version** puts it back; **Undo my edit**
-drops an unsaved edit. Then write the change as a new migration.
+- **A warning while you edit a migration that already ran**, before you save, plus **Show applied
+  version**, which opens the version that ran (found in git) next to yours. It needs `mmk status`
+  to report the checksum each migration ran with.
+- **Database users with only the `read` role** for staging and prod.
 
 ## Requirements
 
@@ -69,14 +67,8 @@ work too: the extension runs next to your project.
 
 ### Which mongo-migrate-kit
 
-| mmk for VS Code | mongo-migrate-kit | What works |
-| --- | --- | --- |
-| 1.0 | older than 1.5.0 | Nothing: it asks you to update. |
-| 1.0 | 1.5.x | Local workflow, environments and the comparison (with a database user that can write). |
-| 1.0 | 1.6.0 or later | Everything: also read-only database users and warnings while editing applied migrations. |
-
-Update with `npm install --save-dev mongo-migrate-kit@latest`. With 1.5.x, the features that need
-1.6.0 stay off and say so.
+It needs **mongo-migrate-kit 1.5.0 or later**; with an older one it asks you to update
+(`npm install --save-dev mongo-migrate-kit@latest`).
 
 ## Settings
 
