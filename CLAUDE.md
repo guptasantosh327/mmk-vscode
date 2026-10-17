@@ -10,22 +10,23 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** Phases 3–6 in progress on stacked branches (`feat/environments` →
-  `feat/applied-file-protection` → `feat/rollback-tests` → …), started 2026-10-17. **Phases 3, 4
-  and 5 complete**: green on the pinned 1.5.0 *and* on a local build of the next mmk. Their exit
-  criteria need R3 / R5 / R6 / R7, which only that build has; on 1.5 those features stay off and
-  say so. Phase 2's 0.1.0 pre-release was skipped: the owner publishes once, at 1.0.
+- **Current phase:** **Phases 3–6 built** (2026-10-17) on stacked branches `feat/environments` →
+  `feat/applied-file-protection` → `feat/rollback-tests` → `release/1.0`, none pushed. Green on
+  the pinned 1.5.0 *and* on a local build of the next mmk. What's left is the owner's: release
+  mongo-migrate-kit 1.6.0, pin it, and publish 1.0.0, in the order `docs/RELEASE.md` gives. Phase
+  2's 0.1.0 pre-release was never published; 1.0.0 is the first release.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
   branches in a throwaway clone, stamp it `1.6.0-dev.0`, `npm pack`, then
   `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
   `test/contract/harness.ts`. `npm ci` puts the pinned 1.5.0 back; check both before committing.
 - **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
   santosh-lodha, which can read the repo's CI runs but not push).
-- **mmk version the contract tests pin:** 1.5.0 (= `MIN_MMK_VERSION`; a test keeps them equal)
+- **mmk version the contract tests pin:** 1.5.0. CI runs every suite on the pin and on
+  `MIN_MMK_VERSION` (1.5.0), and a contract test keeps that matrix and the constant in step.
 - **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not released: R2 on
   MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`; R3 on
   `feat/read-only-reads`; R5 on `feat/status-checksum`; R6 on `feat/test-rollback`; R7 on
-  `feat/lint`.
+  `feat/lint`; R8 on `feat/vscode-docs`. R4 (optional) isn't built.
 - **Before the 1.0 release:** the publisher ID `guptasantosh327` (confirmed) must exist on
   the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
   (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
@@ -34,6 +35,8 @@
   environments, checkBranch) only in `ExtensionMode.Test`; integration tests use it to answer the
   modals and read the tree. Commands that ask questions also take an argument object that skips
   them (`mmk.createMigration`, `mmk.addEnvironment`).
+- **README media:** recorded from the real extension by `scripts/media/record.mjs` (needs the
+  next mmk and `npm i --no-save gifenc@1.0.3 pngjs@7.0.0`). Never edit the images by hand.
 - **Testing gotchas:** a development extension is exempt from Workspace Trust and
   `@vscode/test-electron` always passes `--disable-workspace-trust`, so trust is tested on the
   installed `.vsix` (`test/integration/run-installed.mjs`). Run from a VS Code terminal, the

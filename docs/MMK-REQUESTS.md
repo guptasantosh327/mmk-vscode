@@ -109,6 +109,11 @@ four read commands successfully, and every write command still creates indexes a
 
 ## R4 — Config functions can skip their secret fetch · Phase 3 (optional) · `open`
 
+**Not built for 1.0.** The extension works without it: a config function still runs when an
+environment supplies `MMK_URI` / `MMK_DB`, and mmk gives those priority over what it returns. It
+only matters when the function's own fetch fails (no access to the secret manager from the
+laptop).
+
 **Why:** if `mmk.config.js` is an async function that fetches the URI from a secret manager, it still
 runs when the extension already supplies `MMK_URI`/`MMK_DB`, and a failure there stops everything.
 
@@ -179,7 +184,12 @@ without a name.
 
 ---
 
-## R8 — Docs page for the extension · Phase 6 · `open`
+## R8 — Docs page for the extension · Phase 6 · `in progress`
+
+**Status:** written on mongo-migrate-kit branch `feat/vscode-docs` (commit `309ef38`, not pushed,
+not released) as `docs/guide/vscode.md` ("In VS Code" in the guide's sidebar): install,
+environments, read-only users, applied-file warnings, rollback tests, lint and the compatibility
+table. It names 1.6.0 as the release with R3/R5/R6/R7.
 
 **Proposal:** a page in MMK_REPO `docs/` (VitePress) covering install, environments, read-only users,
 and the compatibility table.

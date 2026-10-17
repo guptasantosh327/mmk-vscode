@@ -320,3 +320,18 @@ logo as SVG, categories, keywords); a CHANGELOG; publish with `vsce` + `ovsx`. *
 Say so in the README.
 
 **Exit criteria:** 1.0.0 is published on both marketplaces, and the README shows each feature.
+
+*Built as:*
+- R8 is `docs/guide/vscode.md` in mongo-migrate-kit (branch `feat/vscode-docs`).
+- The README's GIFs and screenshots are recorded from the real extension by
+  `scripts/media/record.mjs`: a demo project with migrations applied on three databases of an
+  in-memory replica set, VS Code launched with `--remote-debugging-port`, scenes played by
+  `scripts/media/driver.cjs` (inside VS Code, through the extension's commands), frames captured and
+  keys typed over the DevTools protocol, GIFs encoded with `gifenc` (installed `--no-save`, as
+  mongo-migrate-kit does for its docs). B1's frame shows the warning in Problems: VS Code doesn't
+  open a hover in a window that isn't focused.
+- The icon is mmk's logo mark, white on its green, in `media/icon.svg`, rendered to
+  `media/icon.png` by `scripts/media/render-icon.mjs` (headless Chrome).
+- CI runs every suite on the pinned mongo-migrate-kit and on `MIN_MMK_VERSION` (1.5.0); a contract
+  test keeps the matrix and the constant in step.
+- Publishing is the owner's step: `docs/RELEASE.md` lists it, after releasing mongo-migrate-kit.
