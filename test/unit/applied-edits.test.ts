@@ -42,7 +42,7 @@ describe('checksum', () => {
   it('should spot a BOM and shorten a checksum for messages', () => {
     expect(startsWithBom(Buffer.from([0xef, 0xbb, 0xbf, 0x61]))).toBe(true);
     expect(startsWithBom(Buffer.from('abc'))).toBe(false);
-    expect(shortChecksum('3f9a1c07' + 'a'.repeat(52) + 'be21')).toBe('3f9a1c07…be21');
+    expect(shortChecksum(`3f9a1c07${'a'.repeat(52)}be21`)).toBe('3f9a1c07…be21');
   });
 });
 
