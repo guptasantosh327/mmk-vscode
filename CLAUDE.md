@@ -10,24 +10,29 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** **Phase 2 (Local workflow)** built and green on the pinned mmk 1.5.0 (unit
-  190, contract 33, integration 8). It needs no mmk release: with 1.5.0 the config comes from the
-  project's own `MigratorKit.resolveConfig()` (the config bridge, rule 1), and `mmk config --json`
-  takes over automatically on an mmk that has it (R2). Left for its exit criteria: the 0.1.0
-  pre-release on both marketplaces (the owner publishes). Phase 1 completed 2026-10-17.
-- **Developing against unreleased mmk:** build MMK_REPO's branch (`npm run build` there), then
-  `npm install --no-save ../mongo-migrate-kit` here. `npm ci` puts the pinned version back.
+- **Current phase:** Phases 3–6 in progress on stacked branches (`feat/environments` →
+  later phases), started 2026-10-17. **Phase 3 (Environments) complete** on `feat/environments`:
+  green on the pinned 1.5.0 *and* on a local build of the next mmk. Its read-only-user criterion
+  needs R3, which only that build has. Phase 2's 0.1.0 pre-release was skipped: the owner
+  publishes once, at 1.0.
+- **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
+  branches in a throwaway clone, stamp it `1.6.0-dev.0`, `npm pack`, then
+  `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
+  `test/contract/harness.ts`. `npm ci` puts the pinned 1.5.0 back; check both before committing.
 - **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
   santosh-lodha, which can read the repo's CI runs but not push).
 - **mmk version the contract tests pin:** 1.5.0 (= `MIN_MMK_VERSION`; a test keeps them equal)
-- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not pushed or
-  released: R2 on MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`.
-- **Before the Phase 2 pre-release:** the publisher ID `guptasantosh327` (confirmed) must exist on
+- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not released: R2 on
+  MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`; R3 on
+  `feat/read-only-reads`; R5 on `feat/status-checksum`.
+- **Before the 1.0 release:** the publisher ID `guptasantosh327` (confirmed) must exist on
   the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
   (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
 - **Commits** carry only the owner's name: no Claude co-author trailer.
-- **Test hooks:** `activate()` returns `MmkTestApi` (store, idle, sidebar text, setConfirm) only
-  in `ExtensionMode.Test`; integration tests use it to answer the modals and read the tree.
+- **Test hooks:** `activate()` returns `MmkTestApi` (store, idle, sidebar text, setConfirm,
+  environments, checkBranch) only in `ExtensionMode.Test`; integration tests use it to answer the
+  modals and read the tree. Commands that ask questions also take an argument object that skips
+  them (`mmk.createMigration`, `mmk.addEnvironment`).
 - **Testing gotchas:** a development extension is exempt from Workspace Trust and
   `@vscode/test-electron` always passes `--disable-workspace-trust`, so trust is tested on the
   installed `.vsix` (`test/integration/run-installed.mjs`). Run from a VS Code terminal, the
@@ -188,19 +193,24 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── naming.ts            # create preview (mirrors mmk's slugify) + display names
 │   │   ├── migration-functions.ts # where up()/down() are, for run links
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
-│   │   ├── environments.ts      # environment model → MMK_URI / MMK_DB env vars (Phase 3)
+│   │   ├── environments.ts      # mmk.environments, read-only rule (assertCanRun), MMK_URI/MMK_DB
+│   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
 │   │   └── redact.ts            # mask credentials in anything logged
 │   ├── git/                     # NO vscode imports
+│   │   ├── git.ts               # runGit (execFile, bytes out)
+│   │   ├── branches.ts          # current branch, origin/HEAD, branches whose tip has a file
 │   │   ├── applied-version.ts   # find the commit whose SHA-256 matches the record
 │   │   └── ref-files.ts         # copy migrations from origin/main to a temp folder
-│   ├── commands/                # context.ts (Deps, targets), run.ts, create.ts, misc.ts
+│   ├── commands/                # context.ts (Deps, targets), run.ts, create.ts, misc.ts,
+│   │                            # environments.ts (C1, add/edit/remove), environment-registry.ts
 │   ├── views/
 │   │   ├── sidebar.ts           # TreeDataProvider
 │   │   ├── codelens.ts
 │   │   ├── decorations.ts       # Explorer badges
 │   │   ├── diagnostics.ts       # "this migration already ran"
 │   │   ├── statusbar.ts
-│   │   └── matrix/              # webview: panel.ts + media/
+│   │   ├── branch-watch.ts      # after a checkout: local migrations from another branch
+│   │   └── matrix/panel.ts      # webview (C2); its HTML/JS/CSS are in media/matrix/
 │   └── testing/rollback.ts      # TestController (Phase 5)
 ├── test/
 │   ├── unit/                    # vitest

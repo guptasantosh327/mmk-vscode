@@ -8,6 +8,13 @@ that repo's CLAUDE.md, with its own tests, changelog entry and release.
 **Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Once a request is released,
 raise `MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
 
+**Developing against the unreleased requests:** each one is on its own branch in MMK_REPO. To
+use them together, merge the branches in a throwaway clone (not in MMK_REPO), set its version to
+`1.6.0-dev.0`, build, `npm pack`, and `npm install --no-save <tarball>` here. The contract
+tests read the installed version: from `NEXT_MMK` (`1.6.0-0`, in `test/contract/harness.ts`)
+they expect the new behaviour, and 1.5 behaviour below it, so CI stays green on the pinned
+1.5.0. `npm ci` puts the pin back.
+
 **Rules for every request:** additive and non-breaking for existing CLI and CI users; output
 covered by shape tests in MMK_REPO, so mmk's own CI fails if a shape changes; documented in
 MMK_REPO `docs/`.
@@ -75,7 +82,15 @@ it works without a database.
 
 ---
 
-## R3 — Read commands never write on connect · Phase 3 · `open`
+## R3 — Read commands never write on connect · Phase 3 · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/read-only-reads` (commit `3a5b2d6`, not
+pushed, not released) as `connect({ readOnly: true })` (exported `ConnectOptions`), used by
+`status`, `list`, `dry-run`, `status --all-namespaces`, `lockInfo()` and `pendingMigrations()`.
+Write commands still create the changelog index on connect. Tested with an auth-enabled memory
+server and a `read`-role user (library and CLI). The extension's contract test
+`environments.contract.test.ts` expects reads to work from the next mmk, and 1.5's
+`CONNECTION_FAILED` (`not authorized`) before it.
 
 **Why:** staging and prod should be readable with a MongoDB user that has only the `read` role.
 Today `connect()` always creates the changelog index (`src/core/migrator.ts`, `ensureIndexes`), and
@@ -105,7 +120,13 @@ Existing functions that take no argument keep working.
 
 ---
 
-## R5 — Recorded checksum in status output · Phase 4 · `open`
+## R5 — Recorded checksum in status output · Phase 4 · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/status-checksum` (commit `1c4589a`, not
+pushed, not released) as `StatusRow.checksum` on applied rows of `status`, `list` and `dry-run`
+(omitted when a record has none, e.g. an `mmk import` without its file), with a shape test.
+Until it's released, `src/mmk/contract.ts` adds the field in `WireStatusRow`; once pinned,
+that becomes plain `Wire<StatusRow>`.
 
 **Why:** to warn while someone edits an applied file, and to find the version that ran in git, the
 extension needs the **recorded** checksum. `StatusRow` only has `checksumOk`.

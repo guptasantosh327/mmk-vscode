@@ -183,6 +183,37 @@ the matrix model; integration tests that a read-only environment can't run `up`.
 **Exit criteria:** add staging with a read-only user, see the matrix with correct notes, and be unable
 to write to staging from anywhere in the UI.
 
+*Built as:*
+- `src/mmk/environments.ts` parses `mmk.environments` (names, `readOnly`, `color`; anything but
+  `local` is read-only unless it says `"readOnly": false`) and holds the one rule every run goes
+  through: `assertCanRun` lets a read-only environment run only commands that never write to a
+  database (`status`, `list`, `dry-run`, `config`, `create`, `lint`). The store calls it in
+  `run()`, so the UI hiding write actions is a convenience, not the guard.
+- Connections are per **project and environment** (`mmk.connection:<env>:<projectDir>` in
+  `context.secrets`), so a monorepo's projects can point staging at different databases. A
+  project without one shows "isn't set up" for that environment instead of an error.
+- `MmkStore` reads every environment of every project (coalesced per environment) and keeps
+  `environments[name]`; `rows` / `error` / `loading` are the selected one's. Reads of other
+  environments follow file changes like local's. The config is read once per project, with the
+  first environment that asks; if local has no connection string (which mmk 1.5's config bridge
+  needs), a stored environment's connection is tried.
+- Writes on any environment but `local` ask in a modal first, even `up`. `create` always runs on
+  local (it never connects).
+- Copy CLI command on another environment writes `MMK_URI='<staging connection string>'
+  MMK_DB=<db> npx mmk …`: the connection string is never copied.
+- A connection string found in `mmk.environments` (`uri`, `connectionString`, …) gets a warning
+  with "Move to keychain", which stores it and removes it from the setting.
+- The matrix (`src/mmk/matrix.ts`, `src/views/matrix/`) only lays out each database's own
+  `status` verdicts; its notes compare those verdicts ("On staging, not prod", "Only on local so
+  far", "Not on local yet", "Edited after it ran"). Its unit test is the C2 mockup's own data.
+- "Compare files from: origin/main" copies that ref's migrations folder with `git ls-tree` +
+  `git cat-file --batch` (byte for byte, no checkout, no index change) into a temp folder, runs
+  `mmk status --dir <temp>` on each environment, and deletes the folder.
+- The branch-switch warning only names files that **are on another branch's tip**
+  (`git cat-file --batch-check <ref>:<path>` for every branch), so migrations whose files were
+  deleted everywhere never nag. Each file is reported once per branch.
+- Integration tests keep VS Code off the OS keychain with `--password-store=basic`.
+
 ---
 
 ## Phase 4 — Applied-file protection
