@@ -10,7 +10,8 @@ const mocha = { ui: 'tdd', timeout: 120_000 };
 // It stays under the repo (in the ignored .vscode-test folder) so mmk is found in node_modules.
 const WORKSPACE_COPY = '.vscode-test/fixture-workspace';
 const ENVIRONMENTS_COPY = '.vscode-test/fixture-environments';
-for (const copy of [WORKSPACE_COPY, ENVIRONMENTS_COPY]) {
+const PROTECTION_COPY = '.vscode-test/fixture-protection';
+for (const copy of [WORKSPACE_COPY, ENVIRONMENTS_COPY, PROTECTION_COPY]) {
   rmSync(copy, { recursive: true, force: true });
   cpSync('test/fixtures/workspace', copy, { recursive: true });
 }
@@ -31,6 +32,13 @@ export default defineConfig([
     label: 'environments',
     files: 'out/test/integration/environments.test.js',
     workspaceFolder: ENVIRONMENTS_COPY,
+    launchArgs: ['--disable-extensions', ...secrets],
+    mocha,
+  },
+  {
+    label: 'protection',
+    files: 'out/test/integration/protection.test.js',
+    workspaceFolder: PROTECTION_COPY,
     launchArgs: ['--disable-extensions', ...secrets],
     mocha,
   },

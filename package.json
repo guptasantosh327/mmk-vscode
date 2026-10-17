@@ -176,6 +176,23 @@
         "title": "Remove environment…",
         "category": "mmk",
         "icon": "$(trash)"
+      },
+      {
+        "command": "mmk.showAppliedVersion",
+        "title": "Show applied version",
+        "category": "mmk",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "mmk.restoreAppliedVersion",
+        "title": "Restore applied version",
+        "category": "mmk",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "mmk.undoAppliedEdit",
+        "title": "Undo my edit to an applied migration",
+        "category": "mmk"
       }
     ],
     "menus": {
@@ -335,6 +352,30 @@
         {
           "command": "mmk.removeEnvironment",
           "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.showAppliedVersion",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.restoreAppliedVersion",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.undoAppliedEdit",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "mmk.restoreAppliedVersion",
+          "when": "mmk.inAppliedDiff",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mmk.createMigration",
+          "when": "mmk.inAppliedDiff",
+          "group": "navigation@2"
         }
       ]
     },

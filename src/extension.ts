@@ -9,6 +9,11 @@ import type { Connection } from './mmk/environments.js';
 import { type Logger, createLogger } from './mmk/log.js';
 import { discoverProjects } from './mmk/project.js';
 import { MmkStore, type ProjectSnapshot } from './mmk/store.js';
+import {
+  AppliedProtection,
+  type EditedState,
+  registerAppliedCommands,
+} from './views/applied-protection.js';
 import { BranchWatch } from './views/branch-watch.js';
 import { RunLinksProvider } from './views/codelens.js';
 import { MigrationDecorations } from './views/decorations.js';
@@ -29,6 +34,8 @@ export interface MmkTestApi {
   environments: EnvironmentRegistry;
   /** Report migrations from other branches as after a checkout; returns the messages */
   checkBranch(root: string, branch: string | null): Promise<string[]>;
+  /** Check an open migration against what ran now; its edited state, or undefined */
+  checkApplied(document: vscode.TextDocument): Promise<EditedState | undefined>;
 }
 
 /**
@@ -55,8 +62,9 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
   };
 
   const sidebar = new SidebarProvider(deps);
-  const runLinks = new RunLinksProvider(deps);
-  const decorations = new MigrationDecorations(deps);
+  const protection = new AppliedProtection(deps);
+  const runLinks = new RunLinksProvider(deps, protection);
+  const decorations = new MigrationDecorations(deps, protection);
   const statusBar = new StatusBar(deps);
   const watchers = new ProjectWatchers(store);
   const contextKeys = new ContextKeys();
@@ -117,6 +125,12 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     watchers,
     environments,
     branchWatch,
+    protection,
+    protection.onDidChangeState(() => {
+      runLinks.refresh();
+      decorations.refresh();
+    }),
+    ...registerAppliedCommands(deps, protection),
     configFiles,
     { dispose: () => store.dispose() },
     store.onDidChange(scheduleRedraw),
@@ -167,6 +181,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     },
     environments,
     checkBranch: (root, branch) => branchWatch.checkAfterSwitch(root, branch),
+    checkApplied: (document) => protection.check(document),
   };
 }
 

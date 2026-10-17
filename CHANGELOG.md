@@ -26,6 +26,13 @@ All notable changes to this extension are documented here.
   branch are named, with that branch.
 - A connection string written into `mmk.environments` gets a warning and a "Move to keychain"
   button.
+- **Edits to migrations that already ran** are caught while you type, before you save: a warning
+  on the changed lines, a hover that says where it ran and what saving would do, a Problems
+  entry, a `!` badge, and a run link. It compares your text with the checksum mmk recorded on
+  every environment (needs a mongo-migrate-kit that reports it; with 1.5 it says so once).
+- **Show applied version** finds the commit whose version has the recorded checksum and opens it
+  next to your file. **Restore applied version** puts it back; **Undo my edit** drops an unsaved
+  edit.
 
 ## 0.1.0 (pre-release) · 2026-10-17
 

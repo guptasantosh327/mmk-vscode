@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { repositoryRoot } from './branches.js';
-import { GitError, runGit } from './git.js';
+import { GitError, readObjects, runGit } from './git.js';
 
 /** A ref's copy of a folder, in a temporary folder of its own */
 export interface RefFolder {
@@ -51,19 +51,16 @@ export async function copyRefFolder(folder: string, ref: string): Promise<RefFol
   const dir = await mkdtemp(path.join(tmpdir(), 'mmk-ref-'));
   const dispose = (): Promise<void> => rm(dir, { recursive: true, force: true });
   try {
-    if (blobs.length > 0) {
-      const contents = parseBatch(
-        await runGit(root, ['cat-file', '--batch'], {
-          input: `${blobs.map((blob) => blob.sha).join('\n')}\n`,
-        }),
-      );
-      for (const [index, blob] of blobs.entries()) {
-        const content = contents[index];
-        if (content === undefined) {
-          throw new GitError(['cat-file'], '', `git didn't return ${blob.name} from ${ref}.`);
-        }
-        await writeFile(path.join(dir, blob.name), content);
+    const contents = await readObjects(
+      root,
+      blobs.map((blob) => blob.sha),
+    );
+    for (const [index, blob] of blobs.entries()) {
+      const content = contents[index];
+      if (!content) {
+        throw new GitError(['cat-file'], '', `git didn't return ${blob.name} from ${ref}.`);
       }
+      await writeFile(path.join(dir, blob.name), content);
     }
   } catch (error) {
     await dispose();
@@ -82,24 +79,4 @@ function parseTree(listing: Buffer): Array<{ sha: string; name: string }> {
     }
   }
   return blobs;
-}
-
-/** The contents in `git cat-file --batch` output: `<sha> blob <size>\n<bytes>\n` per object */
-function parseBatch(output: Buffer): Buffer[] {
-  const contents: Buffer[] = [];
-  let offset = 0;
-  while (offset < output.length) {
-    const newline = output.indexOf(0x0a, offset);
-    if (newline === -1) {
-      break;
-    }
-    const header = output.subarray(offset, newline).toString('utf8');
-    const size = Number(/^[0-9a-f]+ blob (\d+)$/.exec(header)?.[1]);
-    if (!Number.isInteger(size)) {
-      throw new GitError(['cat-file'], '', `Unexpected git cat-file output: ${header}`);
-    }
-    contents.push(output.subarray(newline + 1, newline + 1 + size));
-    offset = newline + 1 + size + 1;
-  }
-  return contents;
 }

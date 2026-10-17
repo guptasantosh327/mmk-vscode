@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { findAppliedVersion, readVersion } from '../../src/git/applied-version.js';
 import {
   branchesWithFile,
   currentBranch,
@@ -10,6 +11,7 @@ import {
 } from '../../src/git/branches.js';
 import { GitError } from '../../src/git/git.js';
 import { copyRefFolder } from '../../src/git/ref-files.js';
+import { checksumOfText } from '../../src/mmk/checksum.js';
 import { addFiles, makeTree, removeTree } from './helpers/tmp.js';
 
 let repo: string;
@@ -156,5 +158,88 @@ describe('copyRefFolder', () => {
       "There's no origin/nope in this clone. Fetch it first (git fetch), then compare again.",
     );
     await expect(copyRefFolder(migrations, 'origin/nope')).rejects.toBeInstanceOf(GitError);
+  });
+});
+
+describe('findAppliedVersion', () => {
+  let history: string;
+  const file = (): string => path.join(history, 'migrations', '0002-backfill.js');
+  const run = (...args: string[]): string =>
+    execFileSync('git', args, {
+      cwd: history,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'Asha Rao',
+        GIT_AUTHOR_EMAIL: 'asha@example.com',
+        GIT_AUTHOR_DATE: '2026-09-12T10:00:00Z',
+        GIT_COMMITTER_NAME: 'Asha Rao',
+        GIT_COMMITTER_EMAIL: 'asha@example.com',
+      },
+    }).trim();
+
+  const V0 = 'export async function up() { /* v0 */ }\r\nexport async function down() {}\r\n';
+  const V1 = 'export async function up() { /* v1 */ }\r\nexport async function down() {}\r\n';
+  const V2 = '﻿export async function up() { /* v2 */ }\nexport async function down() {}\n';
+  const V3 = 'export async function up() { /* v3 */ }\nexport async function down() {}\n';
+
+  beforeAll(() => {
+    history = makeTree({ 'migrations/0002-old-name.js': V0 });
+    run('init', '-q', '-b', 'main');
+    run('config', 'core.autocrlf', 'false');
+    run('add', '.');
+    run('commit', '-q', '-m', 'v0');
+    writeFileSync(path.join(history, 'migrations', '0002-old-name.js'), V1);
+    run('commit', '-q', '-am', 'v1');
+    run('mv', 'migrations/0002-old-name.js', 'migrations/0002-backfill.js');
+    run('commit', '-q', '-m', 'rename');
+    writeFileSync(file(), V2);
+    run('commit', '-q', '-am', 'v2, renamed');
+    writeFileSync(file(), V3);
+    run('commit', '-q', '-am', 'v3');
+    writeFileSync(file(), 'export async function up() { /* uncommitted */ }\n');
+  });
+
+  afterAll(() => {
+    removeTree(history);
+  });
+
+  it('should find the commit whose version has the checksum, through a rename', async () => {
+    const found = await findAppliedVersion(file(), checksumOfText(V0));
+
+    expect(found).toMatchObject({
+      author: 'Asha Rao',
+      date: '2026-09-12T10:00:00Z',
+      subject: 'v0',
+      path: 'migrations/0002-old-name.js',
+      root: history,
+    });
+    expect(found?.content.toString('utf8')).toBe(V0);
+    expect(found?.shortCommit).toBe(found?.commit.slice(0, found.shortCommit.length));
+  });
+
+  it('should take the newest commit with that version: here the rename', async () => {
+    expect(await findAppliedVersion(file(), checksumOfText(V1))).toMatchObject({
+      subject: 'rename',
+      path: 'migrations/0002-backfill.js',
+    });
+  });
+
+  it('should hash each version as mmk does: a BOM kept, CRLF as it is', async () => {
+    expect((await findAppliedVersion(file(), checksumOfText(V2)))?.subject).toBe('v2, renamed');
+    expect((await findAppliedVersion(file(), checksumOfText(V3)))?.subject).toBe('v3');
+  });
+
+  it('should find nothing for a version that was never committed', async () => {
+    expect(await findAppliedVersion(file(), checksumOfText('not in history'))).toBeNull();
+  });
+
+  it('should read one version back for the applied document', async () => {
+    const found = await findAppliedVersion(file(), checksumOfText(V2));
+
+    expect(
+      (await readVersion(history, found?.commit ?? '', found?.path ?? ''))?.toString('utf8'),
+    ).toBe(V2);
+    expect(await readVersion(history, found?.commit ?? '', 'migrations/nope.js')).toBeNull();
   });
 });

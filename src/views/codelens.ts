@@ -5,6 +5,7 @@ import type { Environment } from '../mmk/environments.js';
 import { findMigrationFunctions } from '../mmk/migration-functions.js';
 import { formatDuration } from '../mmk/model.js';
 import type { MigrationRef } from '../mmk/store.js';
+import type { AppliedProtection } from './applied-protection.js';
 
 /**
  * Run links above `up()` and `down()` in a migration file (designs A2, A3 and C1). Each link
@@ -15,7 +16,10 @@ export class RunLinksProvider implements vscode.CodeLensProvider {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this.changed.event;
 
-  constructor(private readonly deps: Deps) {}
+  constructor(
+    private readonly deps: Deps,
+    private readonly protection: AppliedProtection,
+  ) {}
 
   /** Redraw the links (after the store changed) */
   refresh(): void {
@@ -67,6 +71,19 @@ export class RunLinksProvider implements vscode.CodeLensProvider {
 
     if (row.unadopted) {
       return [lens(upLine, 'Applied before this repo had a namespace · run mmk namespace adopt')];
+    }
+    const edited = this.protection.state(document.uri);
+    if (edited) {
+      // B1: it ran, and this text isn't what ran.
+      const where = edited.verdict.edited.map((record) => record.environment).join(', ');
+      const lenses = [
+        lens(upLine, `$(warning) Applied on ${where} · edited since`),
+        lens(upLine, 'Show applied version', 'mmk.showAppliedVersion', [document.uri]),
+      ];
+      if (lines.down !== null && !environment.readOnly && row.status === 'applied') {
+        lenses.push(lens(lines.down, `Run down on ${environment.name}`, 'mmk.down', [target]));
+      }
+      return lenses;
     }
     if (environment.readOnly) {
       return this.readOnlyLinks(ref, row, environment, lines.down, upLine, lens, target);

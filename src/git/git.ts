@@ -70,3 +70,49 @@ export async function gitText(
 ): Promise<string> {
   return (await runGit(cwd, args, options)).toString('utf8').trim();
 }
+
+/**
+ * Read many objects in one `git cat-file --batch`: each name is a SHA or `<rev>:<path>`. Returns
+ * their bytes in order, or null for one git doesn't have (e.g. a path a commit deleted).
+ * @throws {@link GitError} when git fails or prints something unexpected
+ */
+export async function readObjects(
+  cwd: string,
+  names: readonly string[],
+): Promise<Array<Buffer | null>> {
+  if (names.length === 0) {
+    return [];
+  }
+  if (names.some((name) => /[\r\n]/.test(name))) {
+    throw new GitError(
+      ['cat-file'],
+      '',
+      "A path with a line break can't be read with git cat-file.",
+    );
+  }
+  const output = await runGit(cwd, ['cat-file', '--batch'], { input: `${names.join('\n')}\n` });
+  const contents: Array<Buffer | null> = [];
+  let offset = 0;
+  while (offset < output.length && contents.length < names.length) {
+    const newline = output.indexOf(0x0a, offset);
+    if (newline === -1) {
+      break;
+    }
+    const header = output.subarray(offset, newline).toString('utf8');
+    if (header.endsWith(' missing') || header.endsWith(' ambiguous')) {
+      contents.push(null);
+      offset = newline + 1;
+      continue;
+    }
+    const size = Number(/^[0-9a-f]+ \w+ (\d+)$/.exec(header)?.[1]);
+    if (!Number.isInteger(size)) {
+      throw new GitError(['cat-file'], '', `Unexpected git cat-file output: ${header}`);
+    }
+    contents.push(output.subarray(newline + 1, newline + 1 + size));
+    offset = newline + 1 + size + 1;
+  }
+  if (contents.length !== names.length) {
+    throw new GitError(['cat-file'], '', 'git cat-file returned fewer objects than asked for.');
+  }
+  return contents;
+}
