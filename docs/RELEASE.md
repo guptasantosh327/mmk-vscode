@@ -15,14 +15,14 @@ each other: keep both sides.
 | `feat/json-output` | R9, R10 | `CHANGELOG.md` (each branch adds an `Unreleased` heading: make it one) |
 | `feat/read-only-reads` | R3 | `CHANGELOG.md` |
 | `feat/status-checksum` | R5 | `CHANGELOG.md` |
-| `feat/test-rollback` | R6 | `CHANGELOG.md`; two private fields of `MigratorKit` next to each other |
-| `feat/lint` | R7 | `CHANGELOG.md`, `src/types/index.ts`, `src/core/migrator.ts` (the `node:fs` import and the new methods), `tests/integration/cli.test.ts`, the docs sidebar, `docs/reference/cli.md`, `docs/guide/ci-cd.md` (keep `mmk lint`, then `mmk test-rollback`) |
 | `feat/vscode-docs` | R8 | `CHANGELOG.md`, the docs sidebar |
 
-Then in mongo-migrate-kit: `npm run typecheck && npm run lint && npm test && npm run docs:build`
-(the combined build passed 670 tests), and `npm run release`, picking **minor** (1.6.0).
+**Don't merge** `feat/test-rollback` (R6) or `feat/lint` (R7): both were dropped.
+
+Then in mongo-migrate-kit: `npm run typecheck && npm run lint && npm test && npm run docs:build`,
+and `npm run release`, picking **minor** (1.6.0).
 `docs/guide/vscode.md` and this extension's README name **1.6.0** as the version with
-R3/R5/R6/R7: if the release gets another number, change both.
+R3/R5: if the release gets another number, change both.
 
 ## 2. Pin it here
 
@@ -35,8 +35,6 @@ Then, in one commit:
 - **Imports instead of local declarations** (CLAUDE.md rule 2), now that mmk exports the types:
   - `WireStatusRow` in `src/mmk/contract.ts` becomes `Wire<StatusRow>` (R5's `checksum` is in
     `StatusRow`).
-  - `RollbackTestReport`, `RollbackTestResult`, `RollbackFailure`, `RollbackStep`, `LintReport`
-    and `LintFinding` in `src/mmk/contract.ts` become imports from `mongo-migrate-kit` (R6, R7).
   - `ProjectConfig` can become mmk's `ConfigSummary` (R2; see its note in MMK-REQUESTS.md).
 - **Contract tests:** with 1.6.0 pinned, `hasNextMmk()` is true on the `pinned` CI job, and the
   `1.5.0` job keeps running the 1.5 branches. Keep both: the extension still supports 1.5.x.

@@ -213,10 +213,9 @@ export function connectionEnv(connection: Connection | null): Record<string, str
 
 /**
  * The mmk commands that never write to a database, so they may run on a read-only environment.
- * `create` and `lint` only touch files. `test-rollback` is not here: it creates a temporary
- * database on the same server.
+ * `create` only writes a file.
  */
-const NO_DATABASE_WRITES = new Set(['status', 'list', 'dry-run', 'config', 'create', 'lint']);
+const NO_DATABASE_WRITES = new Set(['status', 'list', 'dry-run', 'config', 'create']);
 
 /** True when `args` is an mmk command that never writes to a database */
 export function isReadCommand(args: readonly string[]): boolean {

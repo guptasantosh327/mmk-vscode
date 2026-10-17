@@ -1,6 +1,6 @@
 # mmk for VS Code
 
-Create, run, roll back and test [mongo-migrate-kit](https://mongo-migrate-kit.vercel.app/) (mmk)
+Create, run and roll back [mongo-migrate-kit](https://mongo-migrate-kit.vercel.app/) (mmk)
 MongoDB migrations without leaving the editor. Compare your branch with staging and prod, and get a
 warning the moment you edit a migration that has already run.
 
@@ -57,20 +57,6 @@ badge and in its run link.
 when it ran, and opens it next to yours. **Restore applied version** puts it back; **Undo my edit**
 drops an unsaved edit. Then write the change as a new migration.
 
-## Rollback tests and lint
-
-![A rollback test failing in down() at the line that threw](media/readme/rollback-tests.png)
-
-**Test Explorer** lists every migration with its `up`, `down` and `up again` steps. Running them
-runs `mmk test-rollback`, which does all of it on a temporary database on the same server and drops
-it afterwards: your database isn't touched. A failure shows mmk's message at the line that threw.
-
-![Lint findings and an edited migration in the Problems panel](media/readme/lint.png)
-
-**Lint findings** from `mmk lint` show in the editor and in Problems: an empty `down()`,
-`updateMany` / `deleteMany` with no filter, a transaction the writes don't take part in, an index
-without a name.
-
 ## Requirements
 
 - mongo-migrate-kit installed in your project: `npm install mongo-migrate-kit mongodb`
@@ -87,7 +73,7 @@ work too: the extension runs next to your project.
 | --- | --- | --- |
 | 1.0 | older than 1.5.0 | Nothing: it asks you to update. |
 | 1.0 | 1.5.x | Local workflow, environments and the comparison (with a database user that can write). |
-| 1.0 | 1.6.0 or later | Everything: also read-only database users, warnings while editing applied migrations, rollback tests and lint. |
+| 1.0 | 1.6.0 or later | Everything: also read-only database users and warnings while editing applied migrations. |
 
 Update with `npm install --save-dev mongo-migrate-kit@latest`. With 1.5.x, the features that need
 1.6.0 stay off and say so.

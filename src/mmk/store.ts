@@ -339,7 +339,6 @@ export class MmkStore {
     args: readonly string[],
     label: string,
     environmentName: string = this.selectedName,
-    options: { signal?: AbortSignal } = {},
   ): Promise<JsonOutput> {
     const entry = this.entries.get(dir);
     if (!entry) {
@@ -379,7 +378,6 @@ export class MmkStore {
       return await this.runMmk(state.invocation, args, {
         env: connectionEnv(connection),
         onStderrLine: (line) => this.log.mmkOutput(line),
-        ...(options.signal ? { signal: options.signal } : {}),
       });
     } finally {
       this.update(entry, { running: null, runningOn: null });

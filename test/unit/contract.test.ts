@@ -3,8 +3,6 @@ import {
   ContractError,
   parseCreateResult,
   parseErrorDocument,
-  parseLintReport,
-  parseRollbackReport,
   parseRunResults,
   parseStatusRows,
   parseUnlockResult,
@@ -206,81 +204,5 @@ describe('parseErrorDocument', () => {
     ['a result object', { released: false, holder: null }],
   ])('should return null for %s', (_label, value) => {
     expect(parseErrorDocument(value)).toBeNull();
-  });
-});
-
-describe('parseRollbackReport (R6)', () => {
-  const REPORT = {
-    database: 'app_mmk_rollback_0a1b2c3d',
-    configuredDatabase: 'app',
-    dropped: true,
-    setup: [{ file: '0001-a.js', status: 'applied', duration: 3 }],
-    results: [
-      {
-        file: '0002-b.js',
-        status: 'failed',
-        steps: [
-          { step: 'up', status: 'passed', duration: 5 },
-          { step: 'down', status: 'failed', duration: 1 },
-        ],
-        failedStep: 'down',
-        error: {
-          code: 'MIGRATION_EXECUTION_FAILED',
-          message: 'boom',
-          cause: 'x',
-          location: '/a:1:2',
-        },
-      },
-    ],
-    passed: 0,
-    failed: 1,
-    skipped: 0,
-  };
-
-  it('should accept the report as mmk prints it', () => {
-    expect(parseRollbackReport(REPORT)).toEqual(REPORT);
-  });
-
-  it('should name the field that is wrong', () => {
-    expect(() =>
-      parseRollbackReport({
-        ...REPORT,
-        results: [
-          { ...REPORT.results[0], steps: [{ step: 'sideways', status: 'passed', duration: 1 }] },
-        ],
-      }),
-    ).toThrow('result 0.steps 0.step should be "up", "down" or "up-again"');
-    expect(() => parseRollbackReport({ ...REPORT, dropped: 'yes' })).toThrow(
-      'the output.dropped should be true or false',
-    );
-  });
-});
-
-describe('parseLintReport (R7)', () => {
-  const FINDING = {
-    file: '0001-a.js',
-    line: 3,
-    column: 5,
-    endLine: 3,
-    endColumn: 16,
-    rule: 'index-without-name',
-    severity: 'warning',
-    message: 'createIndex() without a name …',
-  };
-
-  it('should accept the report, including a rule this extension does not know yet', () => {
-    const report = {
-      files: ['0001-a.js'],
-      findings: [FINDING, { ...FINDING, rule: 'some-future-rule', severity: 'error' }],
-      errors: 1,
-      warnings: 1,
-    };
-    expect(parseLintReport(report)).toEqual(report);
-  });
-
-  it('should refuse 0-based or missing positions', () => {
-    expect(() =>
-      parseLintReport({ files: [], findings: [{ ...FINDING, line: 0 }], errors: 0, warnings: 1 }),
-    ).toThrow('finding 0.line should be a line number');
   });
 });

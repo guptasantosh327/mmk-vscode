@@ -6,8 +6,8 @@
 //   npm i --no-save gifenc@1.0.3 pngjs@7.0.0
 //   npm run bundle && node scripts/media/record.mjs
 //
-// Output: media/readme/*.gif and *.png. It needs the next mongo-migrate-kit (see
-// docs/MMK-REQUESTS.md) for the edit warning, rollback tests and lint.
+// Output: media/readme/*.gif. It needs the next mongo-migrate-kit (see docs/MMK-REQUESTS.md)
+// for the edit warning.
 import { execFileSync, spawn } from 'node:child_process';
 import {
   existsSync,
@@ -263,8 +263,6 @@ try {
       'editor.minimap.enabled': false,
       'editor.fontSize': 13,
       'editor.hover.delay': 100,
-      'testing.automaticallyOpenPeekView': 'failureInVisibleDocument',
-      'testing.openTesting': 'neverOpen',
       'git.openRepositoryInParentFolders': 'always',
       'update.mode': 'none',
       'telemetry.telemetryLevel': 'off',
@@ -316,7 +314,7 @@ try {
   await serve(page, finished);
   page.close();
   code = await exited;
-  for (const name of ['local-workflow', 'environments', 'applied-edit', 'rollback-tests', 'lint']) {
+  for (const name of ['local-workflow', 'environments', 'applied-edit']) {
     encode(name);
   }
 } finally {

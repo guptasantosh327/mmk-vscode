@@ -58,13 +58,13 @@ In the matrix webview, use `--vscode-*` CSS variables (e.g. `--vscode-charts-gre
 
 ### A3 · Applied on local (Phase 2) — `VSRun.dc.html`
 - **Notification:** "Applied on local in 412 ms", detail "add-refunds-collection.js · batch 18 ·
-  transaction committed", buttons **Test rollback** (Phase 5; hide it until then) and **Run down**.
+  transaction committed", buttons **Test rollback** (dropped with Phase 5: not built) and **Run down**.
 - **Run links after:** `✓ Applied on local · batch 18 · 412 ms | Redo | staging: pending | prod: pending`
-  above `up()`; `Run down on local | Test rollback` above `down()`.
+  above `up()`; `Run down on local` above `down()` (*Test rollback* dropped with Phase 5).
 - **Output channel "mmk":** mmk's own log lines for the run (its stderr in `--json` mode).
 - **Sidebar:** the file moves to "Batch 18 · just now". The pending count drops.
 
-### A4 · Rollback test (Phase 5) — `VSTest.dc.html`
+### A4 · Rollback test (Phase 5) — `VSTest.dc.html` · **dropped, not built**
 - **Test Explorer:** "mmk rollback round-trip" → one item per migration → steps *up*, *down*,
   *up again*. Summary: "2 passed · 1 failed · On a temporary copy of orders_dev, dropped after the run".
 - **Failure at the line:** "rollback test failed in down()" + mmk's error

@@ -144,7 +144,10 @@ covered by a shape test.
 
 ---
 
-## R6 — Rollback test command · Phase 5 · `in progress`
+## R6 — Rollback test command · Phase 5 · `dropped`
+
+**Dropped (2026-10-18, owner):** not needed for 1.0, and the owner wants fewer commands for users.
+The branch stays, unmerged; don't merge it. What was built:
 
 **Status:** built on mongo-migrate-kit branch `feat/test-rollback` (commit `1067100`, not pushed,
 not released) as `mmk test-rollback [file] [--json]`, `MigratorKit.testRollback()` and the
@@ -166,7 +169,10 @@ a crash.
 
 ---
 
-## R7 — Migration linter · Phase 5 · `in progress`
+## R7 — Migration linter · Phase 5 · `dropped`
+
+**Dropped (2026-10-18, owner):** not needed for 1.0, and the owner wants fewer commands for users.
+The branch stays, unmerged; don't merge it. What was built:
 
 **Status:** built on mongo-migrate-kit branch `feat/lint` (commit `e026766`, not pushed, not
 released) as `mmk lint [file] [--json]`, `MigratorKit.lint()` and the exported `LintReport` types.
@@ -189,7 +195,7 @@ without a name.
 **Status:** written on mongo-migrate-kit branch `feat/vscode-docs` (commit `309ef38`, not pushed,
 not released) as `docs/guide/vscode.md` ("In VS Code" in the guide's sidebar): install,
 environments, read-only users, applied-file warnings, rollback tests, lint and the compatibility
-table. It names 1.6.0 as the release with R3/R5/R6/R7.
+table. It names 1.6.0 as the release with R3/R5.
 
 **Proposal:** a page in MMK_REPO `docs/` (VitePress) covering install, environments, read-only users,
 and the compatibility table.

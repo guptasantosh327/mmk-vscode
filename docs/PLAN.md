@@ -15,7 +15,7 @@ ID from `docs/MMK-REQUESTS.md`. A phase can't finish until its requests are **re
 | 2 | Local workflow (first pre-release) | A1, A2, A3 | R2, R9, R10 (all optional) |
 | 3 | Environments + matrix | C1, C2 | R3, R4 (optional) |
 | 4 | Applied-file protection | B1, B2 | R5 |
-| 5 | Rollback tests + lint | A4 | R6, R7 |
+| 5 | ~~Rollback tests + lint~~ dropped | ~~A4~~ | ~~R6, R7~~ |
 | 6 | Stable 1.0 release | — | R8 |
 
 ---
@@ -187,7 +187,7 @@ to write to staging from anywhere in the UI.
 - `src/mmk/environments.ts` parses `mmk.environments` (names, `readOnly`, `color`; anything but
   `local` is read-only unless it says `"readOnly": false`) and holds the one rule every run goes
   through: `assertCanRun` lets a read-only environment run only commands that never write to a
-  database (`status`, `list`, `dry-run`, `config`, `create`, `lint`). The store calls it in
+  database (`status`, `list`, `dry-run`, `config`, `create`). The store calls it in
   `run()`, so the UI hiding write actions is a convenience, not the guard.
 - Connections are per **project and environment** (`mmk.connection:<env>:<projectDir>` in
   `context.secrets`), so a monorepo's projects can point staging at different databases. A
@@ -273,40 +273,17 @@ matching commit's version.
 
 ---
 
-## Phase 5 — Rollback tests and lint
+## Phase 5 — Rollback tests and lint (dropped)
 
-**Goal:** find a broken `down()` before it's needed. Design screen **A4**.
+**Dropped on 2026-10-18 by the owner**, to keep the extension and mongo-migrate-kit simple for
+their users: neither was required for 1.0. Both were built first: `mmk test-rollback` (R6) and
+`mmk lint` (R7) on their own mongo-migrate-kit branches, and Test Explorer items plus lint
+diagnostics in the extension (commit `f45f47d` on `feat/rollback-tests`). The mongo-migrate-kit
+branches are kept, unmerged, in case they come back; the extension code was removed in the 1.0
+release branch. Design screen A4 and A3's *Test rollback* button aren't built.
 
-**Needs from mmk:** **R6** (`mmk test-rollback --json`) and **R7** (`mmk lint --json`). Both are
-designed and built in MMK_REPO first.
-
-**Tasks:** a `TestController` with one test item per migration and steps up / down / up again.
-Show failures as a `TestMessage` at the failing line (A4), with results in Test Explorer and the
-Test Results panel. Show lint findings as diagnostics (source `mmk`, code = the lint rule).
-
-**Exit criteria:** the A4 example (`dropIndex` using the default index name after `up()` created a
-custom name) fails in Test Explorer with mmk's message at line 12.
-
-*Built as:*
-- mmk side (R6, R7): `mmk test-rollback` opens its own connection and never touches the configured
-  database; it runs every file in order (or one file after applying the earlier ones), stops at the
-  first failure, and drops the temporary database also on SIGINT/SIGTERM. `mmk lint` reads files
-  only, with its own tokenizer (mmk's dependencies are locked).
-- `src/testing/rollback.ts`: one item per migration with `up` / `down` / `up again` children.
-  Running everything, or every file of a project, is one `mmk test-rollback --json`; running some
-  files is one run per file. Stop aborts the process (SIGTERM), and mmk drops its database. Always
-  on `local`; `assertCanRun` keeps it off read-only environments (`test-rollback` creates a
-  database, so it isn't a read command).
-- The failure message is "rollback test failed in down()" followed by mmk's own message as is
-  (which already says where it ran and that the configured database wasn't touched), placed at
-  mmk's `location` when that's in the file, else at the step's line. The summary in Test Results
-  comes from the report's counts and database name (`src/mmk/rollback.ts`).
-- The A3 notification gets its **Test rollback** button, and a *Test rollback* run link sits above
-  `down()` on local.
-- Lint diagnostics (`src/views/lint-diagnostics.ts`) run `mmk lint --json` per project when its
-  config or list of files changes and after a save; their code links to mmk's rule docs.
-- With an mmk that has neither command (1.5), the run reports "needs a newer mongo-migrate-kit" on
-  each item and lint stays quiet; detected by commander's `unknown command`, not by version.
+The original goal was to find a broken `down()` before it's needed: run up → down → up on a
+temporary database (R6) and flag risky patterns in migration files (R7).
 
 ---
 

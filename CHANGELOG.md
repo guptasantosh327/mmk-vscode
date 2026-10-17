@@ -5,8 +5,8 @@ All notable changes to this extension are documented here.
 ## 1.0.0 · unreleased
 
 The first release. (0.1.0 was prepared as a pre-release and never published.) It needs
-mongo-migrate-kit 1.5.0 or later; read-only database users, edit warnings, rollback tests and lint
-need 1.6.0 or later.
+mongo-migrate-kit 1.5.0 or later; read-only database users and edit warnings need 1.6.0 or
+later.
 
 ### Local workflow
 
@@ -15,8 +15,8 @@ need 1.6.0 or later.
   pending list.
 - **Create migration:** a name input with a preview of the file mmk will create and a
   JavaScript/TypeScript toggle; the new file opens.
-- **Run links** above `up()` and `down()`: run up, dry run, redo, run down and test rollback, with
-  what mmk recorded (batch, duration, edited since).
+- **Run links** above `up()` and `down()`: run up, dry run, redo and run down, with what mmk
+  recorded (batch, duration, edited since).
 - **Explorer badges** for pending (`●`) and edited (`!`) migrations, and a status bar item with the
   environment and its pending count.
 - **Confirmations** before `down`, `redo`, a forced rollback of an edited file, releasing the
@@ -56,10 +56,3 @@ need 1.6.0 or later.
 - **Show applied version** finds the commit whose version has the recorded checksum and opens it
   next to your file. **Restore applied version** puts it back; **Undo my edit** drops an unsaved
   edit.
-
-### Rollback tests and lint
-
-- **Rollback tests in Test Explorer:** every migration with its `up`, `down` and `up again` steps,
-  run by `mmk test-rollback` on a temporary database that mmk drops afterwards. A failure shows
-  mmk's message at the line that threw. Also from the run link and the button after a run.
-- **Lint findings** from `mmk lint` as warnings and errors in the editor and the Problems panel.

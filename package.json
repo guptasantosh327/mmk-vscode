@@ -1,7 +1,7 @@
 {
   "name": "mmk-vscode",
   "displayName": "mmk for VS Code",
-  "description": "Run, roll back, test and compare mongo-migrate-kit MongoDB migrations from the editor, with a warning when you edit one that already ran",
+  "description": "Run, roll back and compare mongo-migrate-kit MongoDB migrations from the editor, with a warning when you edit one that already ran",
   "version": "1.0.0",
   "publisher": "guptasantosh327",
   "license": "MIT",
@@ -23,8 +23,6 @@
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Testing",
-    "Linters",
     "Other"
   ],
   "keywords": [
@@ -210,12 +208,6 @@
         "command": "mmk.undoAppliedEdit",
         "title": "Undo my edit to an applied migration",
         "category": "mmk"
-      },
-      {
-        "command": "mmk.testRollback",
-        "title": "Test rollback (temporary database)",
-        "category": "mmk",
-        "icon": "$(beaker)"
       }
     ],
     "menus": {
@@ -321,11 +313,6 @@
           "command": "mmk.selectEnvironment",
           "when": "view == mmk.migrations && viewItem == mmk.env",
           "group": "inline@2"
-        },
-        {
-          "command": "mmk.testRollback",
-          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.migration\\.(pending|applied)$/",
-          "group": "1_run@3"
         }
       ],
       "commandPalette": [
@@ -392,10 +379,6 @@
         {
           "command": "mmk.undoAppliedEdit",
           "when": "false"
-        },
-        {
-          "command": "mmk.testRollback",
-          "when": "mmk.hasProject"
         }
       ],
       "editor/title": [

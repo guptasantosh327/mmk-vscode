@@ -154,24 +154,6 @@ async function run() {
   await closeAll();
   await clearNotifications();
 
-  // ── A4: rollback tests in Test Explorer ────────────────────────────────────────────────
-  await open('20261016101502-index-orders-by-customer-date.js', 0);
-  await exec('workbench.view.testing.focus');
-  await sleep(800);
-  await exec('testing.runAll');
-  await sleep(1500);
-  await settle(3000);
-  await frame('rollback-tests', 4000);
-  await closeAll();
-  await clearNotifications();
-
-  // ── Lint findings in Problems ──────────────────────────────────────────────────────────
-  await exec('workbench.view.extension.mmk');
-  await open('20261015110000-index-payments-by-customer.js', 0);
-  await exec('workbench.actions.view.problems');
-  await sleep(1500);
-  await frame('lint', 3000);
-
   await ask({ action: 'finish' });
 }
 

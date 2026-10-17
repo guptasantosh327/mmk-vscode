@@ -11,7 +11,8 @@
 > Keep this block short and current. Update it at the end of every phase.
 
 - **Current phase:** **Phases 3–6 built** (2026-10-17) on stacked branches `feat/environments` →
-  `feat/applied-file-protection` → `feat/rollback-tests` → `release/1.0`, none pushed. Green on
+  `feat/applied-file-protection` → `feat/rollback-tests` → `release/1.0`, none pushed. Phase 5
+  (rollback tests, lint) was built and then dropped on `release/1.0` at the owner's request. Green on
   the pinned 1.5.0 *and* on a local build of the next mmk. What's left is the owner's: release
   mongo-migrate-kit 1.6.0, pin it, and publish 1.0.0, in the order `docs/RELEASE.md` gives. Phase
   2's 0.1.0 pre-release was never published; 1.0.0 is the first release.
@@ -25,8 +26,9 @@
   `MIN_MMK_VERSION` (1.5.0), and a contract test keeps that matrix and the constant in step.
 - **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not released: R2 on
   MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`; R3 on
-  `feat/read-only-reads`; R5 on `feat/status-checksum`; R6 on `feat/test-rollback`; R7 on
-  `feat/lint`; R8 on `feat/vscode-docs`. R4 (optional) isn't built.
+  `feat/read-only-reads`; R5 on `feat/status-checksum`; R8 on `feat/vscode-docs`. R4 (optional)
+  isn't built. **R6 and R7 were dropped** (owner, 2026-10-18): their branches `feat/test-rollback`
+  and `feat/lint` stay unmerged, and Phase 5 (rollback tests, lint) isn't in the extension.
 - **Before the 1.0 release:** the publisher ID `guptasantosh327` (confirmed) must exist on
   the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
   (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
@@ -57,7 +59,6 @@ mmk into the editor:
 - a warning **while typing** when someone edits a migration that has already run
 - a diff against the exact version that ran, found by matching mmk's recorded checksum in git history
 - environments (local / staging / prod) with staging and prod **read-only**, and a files × environments matrix
-- rollback tests (up → down → up on a temporary database) in Test Explorer
 
 It is a **UI over the mmk CLI**. mmk decides every behaviour. This repo only calls mmk and shows
 what it returns.
@@ -156,7 +157,7 @@ migration can't take down the editor, and `.ts` migrations run on the same Node 
 terminal.
 
 **Layering rule:** `src/mmk/**` and `src/git/**` never import `vscode`, so they can be unit-tested with
-vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing/**` import `vscode`.
+vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vscode`.
 
 ---
 
@@ -198,7 +199,6 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── migration-functions.ts # where up()/down() are, for run links
 │   │   ├── checksum.ts          # mmk's checksum of editor text (rule 1, exception 1)
 │   │   ├── applied-edits.ts     # which environments a text differs from, B1 wording
-│   │   ├── rollback.ts          # test-rollback report → per-file/step outcomes (A4)
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
 │   │   ├── environments.ts      # mmk.environments, read-only rule (assertCanRun), MMK_URI/MMK_DB
 │   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
@@ -215,11 +215,9 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── codelens.ts
 │   │   ├── decorations.ts       # Explorer badges
 │   │   ├── applied-protection.ts # B1/B2: diagnostic, hover, mmk-applied: docs, diff, restore
-│   │   ├── lint-diagnostics.ts  # mmk lint --json → diagnostics
 │   │   ├── statusbar.ts
 │   │   ├── branch-watch.ts      # after a checkout: local migrations from another branch
 │   │   └── matrix/panel.ts      # webview (C2); its HTML/JS/CSS are in media/matrix/
-│   └── testing/rollback.ts      # TestController (Phase 5)
 ├── test/
 │   ├── unit/                    # vitest
 │   ├── contract/                # real mmk + mongodb-memory-server

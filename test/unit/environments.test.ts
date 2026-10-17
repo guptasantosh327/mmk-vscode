@@ -180,17 +180,13 @@ describe('connectionEnv', () => {
 describe('read-only enforcement', () => {
   const staging = { name: 'staging', readOnly: true, color: 'warning', local: false } as const;
 
-  it.each([
-    ['status'],
-    ['list', '--pending'],
-    ['dry-run', 'up'],
-    ['config'],
-    ['create', 'x'],
-    ['lint'],
-  ])('should allow %j', (...args) => {
-    expect(isReadCommand(args)).toBe(true);
-    expect(() => assertCanRun(staging, args)).not.toThrow();
-  });
+  it.each([['status'], ['list', '--pending'], ['dry-run', 'up'], ['config'], ['create', 'x']])(
+    'should allow %j',
+    (...args) => {
+      expect(isReadCommand(args)).toBe(true);
+      expect(() => assertCanRun(staging, args)).not.toThrow();
+    },
+  );
 
   it.each([
     ['up'],
@@ -198,8 +194,9 @@ describe('read-only enforcement', () => {
     ['redo'],
     ['unlock', '--yes'],
     ['import'],
-    ['test-rollback'],
     ['namespace', 'adopt'],
+    // Anything not known to be read-only is refused, including commands a newer mmk adds.
+    ['some-future-command'],
   ])('should refuse %j on a read-only environment', (...args) => {
     expect(isReadCommand(args)).toBe(false);
     expect(() => assertCanRun(staging, args)).toThrow(ReadOnlyEnvironmentError);

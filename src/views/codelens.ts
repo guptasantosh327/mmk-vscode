@@ -99,9 +99,6 @@ export class RunLinksProvider implements vscode.CodeLensProvider {
       );
       if (lines.down !== null) {
         lenses.push(lens(lines.down, `Run down appears once up has run on ${environment.name}`));
-        if (environment.local) {
-          lenses.push(lens(lines.down, 'Test rollback', 'mmk.testRollback', [target]));
-        }
       }
     } else {
       lenses.push(
@@ -111,9 +108,6 @@ export class RunLinksProvider implements vscode.CodeLensProvider {
       );
       if (lines.down !== null) {
         lenses.push(lens(lines.down, `Run down on ${environment.name}`, 'mmk.down', [target]));
-        if (environment.local) {
-          lenses.push(lens(lines.down, 'Test rollback', 'mmk.testRollback', [target]));
-        }
       }
     }
     return lenses;

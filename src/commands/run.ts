@@ -90,15 +90,11 @@ async function runUp(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | u
     void vscode.window
       .showInformationMessage(
         `Applied on ${environment.name} in ${formatDuration(applied.duration ?? 0)}: ${name} · batch ${applied.batch ?? '?'}`,
-        'Test rollback',
         'Run down',
       )
       .then((choice) => {
-        const target = { dir: ref.project.dir, file: ref.file };
         if (choice === 'Run down') {
-          void vscode.commands.executeCommand('mmk.down', target);
-        } else if (choice === 'Test rollback') {
-          void vscode.commands.executeCommand('mmk.testRollback', target);
+          void vscode.commands.executeCommand('mmk.down', { dir: ref.project.dir, file: ref.file });
         }
       });
   } else {
