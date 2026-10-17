@@ -11,11 +11,10 @@
 > Keep this block short and current. Update it at the end of every phase.
 
 - **Current phase:** Phases 3–6 in progress on stacked branches (`feat/environments` →
-  `feat/applied-file-protection` → …), started 2026-10-17. **Phase 3 (Environments)** and
-  **Phase 4 (Applied-file protection)** complete: green on the pinned 1.5.0 *and* on a local
-  build of the next mmk. Their exit criteria need R3 / R5, which only that build has; on 1.5 the
-  edit warning stays off (and says so). Phase 2's 0.1.0 pre-release was skipped: the owner
-  publishes once, at 1.0.
+  `feat/applied-file-protection` → `feat/rollback-tests` → …), started 2026-10-17. **Phases 3, 4
+  and 5 complete**: green on the pinned 1.5.0 *and* on a local build of the next mmk. Their exit
+  criteria need R3 / R5 / R6 / R7, which only that build has; on 1.5 those features stay off and
+  say so. Phase 2's 0.1.0 pre-release was skipped: the owner publishes once, at 1.0.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
   branches in a throwaway clone, stamp it `1.6.0-dev.0`, `npm pack`, then
   `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
@@ -25,7 +24,8 @@
 - **mmk version the contract tests pin:** 1.5.0 (= `MIN_MMK_VERSION`; a test keeps them equal)
 - **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not released: R2 on
   MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`; R3 on
-  `feat/read-only-reads`; R5 on `feat/status-checksum`.
+  `feat/read-only-reads`; R5 on `feat/status-checksum`; R6 on `feat/test-rollback`; R7 on
+  `feat/lint`.
 - **Before the 1.0 release:** the publisher ID `guptasantosh327` (confirmed) must exist on
   the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
   (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
@@ -195,6 +195,7 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── migration-functions.ts # where up()/down() are, for run links
 │   │   ├── checksum.ts          # mmk's checksum of editor text (rule 1, exception 1)
 │   │   ├── applied-edits.ts     # which environments a text differs from, B1 wording
+│   │   ├── rollback.ts          # test-rollback report → per-file/step outcomes (A4)
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
 │   │   ├── environments.ts      # mmk.environments, read-only rule (assertCanRun), MMK_URI/MMK_DB
 │   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
@@ -211,6 +212,7 @@ vitest. Only `src/extension.ts`, `src/commands/**`, `src/views/**`, `src/testing
 │   │   ├── codelens.ts
 │   │   ├── decorations.ts       # Explorer badges
 │   │   ├── applied-protection.ts # B1/B2: diagnostic, hover, mmk-applied: docs, diff, restore
+│   │   ├── lint-diagnostics.ts  # mmk lint --json → diagnostics
 │   │   ├── statusbar.ts
 │   │   ├── branch-watch.ts      # after a checkout: local migrations from another branch
 │   │   └── matrix/panel.ts      # webview (C2); its HTML/JS/CSS are in media/matrix/

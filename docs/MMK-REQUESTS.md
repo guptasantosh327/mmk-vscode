@@ -139,7 +139,14 @@ covered by a shape test.
 
 ---
 
-## R6 — Rollback test command · Phase 5 · `open`
+## R6 — Rollback test command · Phase 5 · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/test-rollback` (commit `1067100`, not pushed,
+not released) as `mmk test-rollback [file] [--json]`, `MigratorKit.testRollback()` and the
+exported `RollbackTestReport` types, with tests for success, a failing `down()`, a failing second
+`up()`, setup, a crash and SIGTERM. It opens its own connection, so it doesn't depend on R3. Until
+released, `src/mmk/contract.ts` declares the report's shape with mmk's names. Merging it with
+`feat/read-only-reads` conflicts on two adjacent private fields of `MigratorKit`: keep both.
 
 **Why:** IDEAS.md's "Testing that a migration can be rolled back". The extension shows results; mmk
 owns the logic.
@@ -154,7 +161,14 @@ a crash.
 
 ---
 
-## R7 — Migration linter · Phase 5 · `open`
+## R7 — Migration linter · Phase 5 · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/lint` (commit `e026766`, not pushed, not
+released) as `mmk lint [file] [--json]`, `MigratorKit.lint()` and the exported `LintReport` types.
+Rules: `empty-down`, `unfiltered-write`, `transaction-without-session` (error),
+`index-without-name`; `// mmk-lint-disable-next-line <rule>`. No new dependency. Merging it after
+`feat/test-rollback` conflicts only where both add to the same lists (types, docs, CLI tests):
+keep both sides.
 
 **Why:** IDEAS.md's "A linter for risky migrations".
 

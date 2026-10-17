@@ -287,6 +287,27 @@ Test Results panel. Show lint findings as diagnostics (source `mmk`, code = the 
 **Exit criteria:** the A4 example (`dropIndex` using the default index name after `up()` created a
 custom name) fails in Test Explorer with mmk's message at line 12.
 
+*Built as:*
+- mmk side (R6, R7): `mmk test-rollback` opens its own connection and never touches the configured
+  database; it runs every file in order (or one file after applying the earlier ones), stops at the
+  first failure, and drops the temporary database also on SIGINT/SIGTERM. `mmk lint` reads files
+  only, with its own tokenizer (mmk's dependencies are locked).
+- `src/testing/rollback.ts`: one item per migration with `up` / `down` / `up again` children.
+  Running everything, or every file of a project, is one `mmk test-rollback --json`; running some
+  files is one run per file. Stop aborts the process (SIGTERM), and mmk drops its database. Always
+  on `local`; `assertCanRun` keeps it off read-only environments (`test-rollback` creates a
+  database, so it isn't a read command).
+- The failure message is "rollback test failed in down()" followed by mmk's own message as is
+  (which already says where it ran and that the configured database wasn't touched), placed at
+  mmk's `location` when that's in the file, else at the step's line. The summary in Test Results
+  comes from the report's counts and database name (`src/mmk/rollback.ts`).
+- The A3 notification gets its **Test rollback** button, and a *Test rollback* run link sits above
+  `down()` on local.
+- Lint diagnostics (`src/views/lint-diagnostics.ts`) run `mmk lint --json` per project when its
+  config or list of files changes and after a save; their code links to mmk's rule docs.
+- With an mmk that has neither command (1.5), the run reports "needs a newer mongo-migrate-kit" on
+  each item and lint stays quiet; detected by commander's `unknown command`, not by version.
+
 ---
 
 ## Phase 6 — Stable 1.0
