@@ -21,3 +21,6 @@ vitest.config.mts
 **/*.ts
 !node_modules/@vscode/codicons/dist/codicon.css
 !node_modules/@vscode/codicons/dist/codicon.ttf
+media/readme/**
+media/icon.svg
+scripts/**

@@ -5,7 +5,12 @@ import path from 'node:path';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MmkCommandError, runMmkVersion } from '../../src/mmk/cli.js';
-import { MIN_MMK_VERSION, checkCompat } from '../../src/mmk/compat.js';
+import {
+  MIN_MMK_VERSION,
+  checkCompat,
+  compareVersions,
+  parseVersion,
+} from '../../src/mmk/compat.js';
 import {
   parseCreateResult,
   parseRunResults,
@@ -16,6 +21,7 @@ import {
   type ContractProject,
   FIXTURE_AUTHOR,
   FIXTURE_FILES,
+  REPO_ROOT,
   createProject,
   hasNextMmk,
   installedMmkVersion,
@@ -85,8 +91,15 @@ describe(`mmk --version (pinned mongo-migrate-kit ${pinnedMmkVersion()})`, () =>
     expect(checkCompat(printed)).toEqual({ ok: true, version: printed });
   });
 
-  it('should pin the version MIN_MMK_VERSION names, so the minimum is the version tested', () => {
-    expect(pinnedMmkVersion()).toBe(MIN_MMK_VERSION);
+  it('should test MIN_MMK_VERSION in CI, and pin a version at least as new', () => {
+    // .github/workflows/ci.yml runs every suite on the pinned mmk and on the oldest supported one.
+    const workflow = readFileSync(path.join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const oldest = /mmk: \[pinned, ([0-9.]+)\]/.exec(workflow)?.[1];
+    expect(oldest).toBe(MIN_MMK_VERSION);
+
+    const pinned = parseVersion(pinnedMmkVersion());
+    const minimum = parseVersion(MIN_MMK_VERSION);
+    expect(pinned && minimum && compareVersions(pinned, minimum) >= 0).toBe(true);
   });
 });
 

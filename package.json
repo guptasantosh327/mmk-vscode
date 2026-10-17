@@ -1,26 +1,43 @@
 {
   "name": "mmk-vscode",
   "displayName": "mmk for VS Code",
-  "description": "Run, roll back and review mongo-migrate-kit MongoDB migrations from the editor",
-  "version": "0.1.0",
+  "description": "Run, roll back, test and compare mongo-migrate-kit MongoDB migrations from the editor, with a warning when you edit one that already ran",
+  "version": "1.0.0",
   "publisher": "guptasantosh327",
   "license": "MIT",
   "author": "Santosh Gupta",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#2D522C",
+    "theme": "dark"
+  },
+  "homepage": "https://mongo-migrate-kit.vercel.app/guide/vscode",
   "repository": {
     "type": "git",
     "url": "https://github.com/guptasantosh327/mmk-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/guptasantosh327/mmk-vscode/issues"
   },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
+    "Testing",
+    "Linters",
     "Other"
   ],
   "keywords": [
     "mongodb",
+    "mongo",
     "migrations",
+    "migration",
+    "database",
+    "schema",
+    "rollback",
     "mongo-migrate-kit",
-    "mmk"
+    "mmk",
+    "mongoose"
   ],
   "extensionKind": [
     "workspace"

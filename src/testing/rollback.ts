@@ -151,8 +151,8 @@ export class RollbackTests implements vscode.Disposable {
           stepLabel(step),
           uri,
         );
-        const line = (step === 'down' ? lines.down : lines.up) ?? 0;
-        child.range = new vscode.Range(line, 0, line, 0);
+        // No range: Test Explorer sorts by location, which would put "up again" before "down".
+        // The file's item marks up(); a failure still points at the line mmk names.
         child.sortText = String(index);
         this.data.set(child, { kind: 'step', dir, file, step });
         return child;
@@ -333,9 +333,12 @@ export class RollbackTests implements vscode.Disposable {
           item.uri,
           new vscode.Position(line, Math.max(0, location.column - 1)),
         );
-      } else if (target.range) {
-        line = target.range.start.line;
-        message.location = new vscode.Location(item.uri, target.range);
+      } else {
+        const range = target.range ?? item.range;
+        if (range) {
+          line = range.start.line;
+          message.location = new vscode.Location(item.uri, range);
+        }
       }
     }
     this.lastRun.messages.push({ id: target.id, text, line, file: item.uri?.fsPath ?? null });

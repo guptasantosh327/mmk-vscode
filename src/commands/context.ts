@@ -89,7 +89,13 @@ export async function resolveProject(
   target: unknown,
 ): Promise<ProjectSnapshot | undefined> {
   if (isDirTarget(target)) {
-    return deps.store.snapshot(target.dir);
+    const project = deps.store.snapshot(target.dir);
+    if (!project) {
+      void vscode.window.showWarningMessage(
+        `There's no mmk project at ${target.dir}. Refresh the mmk view if you just added it.`,
+      );
+    }
+    return project;
   }
   const projects = deps.store.snapshots();
   if (projects.length === 0) {

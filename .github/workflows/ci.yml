@@ -10,8 +10,14 @@ permissions:
 
 jobs:
   check:
-    name: Lint, typecheck and test
+    name: Lint, typecheck and test (mongo-migrate-kit ${{ matrix.mmk }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The pinned devDependency, and the oldest version the extension supports
+        # (MIN_MMK_VERSION in src/mmk/compat.ts; a contract test keeps the two equal).
+        mmk: [pinned, 1.5.0]
     steps:
       - uses: actions/checkout@v5
 
@@ -21,6 +27,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Use mongo-migrate-kit ${{ matrix.mmk }}
+        if: matrix.mmk != 'pinned'
+        run: npm install --no-save mongo-migrate-kit@${{ matrix.mmk }}
 
       - name: Lint (biome)
         run: npx biome ci src test
