@@ -11,10 +11,13 @@ const mocha = { ui: 'tdd', timeout: 120_000 };
 const WORKSPACE_COPY = '.vscode-test/fixture-workspace';
 const ENVIRONMENTS_COPY = '.vscode-test/fixture-environments';
 const PROTECTION_COPY = '.vscode-test/fixture-protection';
-for (const copy of [WORKSPACE_COPY, ENVIRONMENTS_COPY, PROTECTION_COPY]) {
+const ROLLBACK_COPY = '.vscode-test/fixture-rollback';
+for (const copy of [WORKSPACE_COPY, ENVIRONMENTS_COPY, PROTECTION_COPY, ROLLBACK_COPY]) {
   rmSync(copy, { recursive: true, force: true });
   cpSync('test/fixtures/workspace', copy, { recursive: true });
 }
+// The rollback suite also gets design A4's migration, whose down() fails.
+cpSync('test/fixtures/a4', `${ROLLBACK_COPY}/migrations`, { recursive: true });
 
 // Connection strings go to VS Code's secret storage. Keep the test instances off the OS
 // keychain where VS Code supports it (basic storage on Linux).
@@ -39,6 +42,13 @@ export default defineConfig([
     label: 'protection',
     files: 'out/test/integration/protection.test.js',
     workspaceFolder: PROTECTION_COPY,
+    launchArgs: ['--disable-extensions', ...secrets],
+    mocha,
+  },
+  {
+    label: 'rollback',
+    files: 'out/test/integration/rollback.test.js',
+    workspaceFolder: ROLLBACK_COPY,
     launchArgs: ['--disable-extensions', ...secrets],
     mocha,
   },

@@ -153,6 +153,141 @@ export function parseProjectConfig(value: unknown, command: string): ProjectConf
   };
 }
 
+// ─── Rollback tests (R6) and lint (R7) ─────────────────────────────────────────
+//
+// mongo-migrate-kit after 1.5 exports these types (`RollbackTestReport`, `LintReport`, …). Until
+// that release is pinned they're declared here with mmk's names and shapes, so switching to the
+// import is a one-line change; the field rules below are what the contract tests hold the real
+// output to.
+
+/** A step of a rollback test */
+export type RollbackStep = 'up' | 'down' | 'up-again';
+
+/** Why a rollback test step (or a setup step) failed */
+export interface RollbackFailure {
+  code?: ErrorCode;
+  /** mmk's own explanation, ready to show */
+  message: string;
+  /** The migration's own error, e.g. `MongoServerError: index not found …` */
+  cause?: string;
+  /** `path:line:column` in the migration file, when mmk could tell */
+  location?: string;
+}
+
+/** The rollback test of one migration file */
+export interface RollbackTestResult {
+  file: string;
+  status: 'passed' | 'failed' | 'skipped';
+  steps: Array<{ step: RollbackStep; status: 'passed' | 'failed'; duration: number }>;
+  failedStep?: RollbackStep;
+  error?: RollbackFailure;
+  reason?: string;
+}
+
+/** `mmk test-rollback --json` */
+export interface RollbackTestReport {
+  /** The temporary database the tests ran in */
+  database: string;
+  /** The configured database, which mmk didn't touch */
+  configuredDatabase: string;
+  dropped: boolean;
+  setup: Array<{
+    file: string;
+    status: 'applied' | 'failed';
+    duration: number;
+    error?: RollbackFailure;
+  }>;
+  results: RollbackTestResult[];
+  passed: number;
+  failed: number;
+  skipped: number;
+}
+
+/** One finding of `mmk lint --json`; lines and columns are 1-based */
+export interface LintFinding {
+  file: string;
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+  /** The rule's name, e.g. `empty-down`; a newer mmk may add rules */
+  rule: string;
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+/** `mmk lint --json` */
+export interface LintReport {
+  files: string[];
+  findings: LintFinding[];
+  errors: number;
+  warnings: number;
+}
+
+/** Parse `mmk test-rollback --json` */
+export function parseRollbackReport(value: unknown): RollbackTestReport {
+  const command = 'test-rollback';
+  const report = checkFields<RollbackTestReport>(command, 'the output', value, {
+    database: required(isString, 'a string'),
+    configuredDatabase: required(isString, 'a string'),
+    dropped: required(isBoolean, 'true or false'),
+    setup: required(Array.isArray, 'an array'),
+    results: required(Array.isArray, 'an array'),
+    passed: required(isNumber, 'a number'),
+    failed: required(isNumber, 'a number'),
+    skipped: required(isNumber, 'a number'),
+  });
+  report.setup.forEach((setup, index) => {
+    checkFields(command, `setup ${index}`, setup, {
+      file: required(isString, 'a string'),
+      status: required(oneOf(['applied', 'failed']), '"applied" or "failed"'),
+      duration: required(isNumber, 'a number'),
+      error: optional(isFailure, 'an object with a message'),
+    });
+  });
+  report.results.forEach((result, index) => {
+    checkFields(command, `result ${index}`, result, {
+      file: required(isString, 'a string'),
+      status: required(oneOf(['passed', 'failed', 'skipped']), '"passed", "failed" or "skipped"'),
+      steps: required(Array.isArray, 'an array'),
+      failedStep: optional(oneOf(ROLLBACK_STEPS), '"up", "down" or "up-again"'),
+      error: optional(isFailure, 'an object with a message'),
+      reason: optional(isString, 'a string'),
+    });
+    result.steps.forEach((step, stepIndex) => {
+      checkFields(command, `result ${index}.steps ${stepIndex}`, step, {
+        step: required(oneOf(ROLLBACK_STEPS), '"up", "down" or "up-again"'),
+        status: required(oneOf(['passed', 'failed']), '"passed" or "failed"'),
+        duration: required(isNumber, 'a number'),
+      });
+    });
+  });
+  return report;
+}
+
+/** Parse `mmk lint --json` */
+export function parseLintReport(value: unknown): LintReport {
+  const report = checkFields<LintReport>('lint', 'the output', value, {
+    files: required(isStringArray, 'an array of strings'),
+    findings: required(Array.isArray, 'an array'),
+    errors: required(isNumber, 'a number'),
+    warnings: required(isNumber, 'a number'),
+  });
+  report.findings.forEach((finding, index) => {
+    checkFields('lint', `finding ${index}`, finding, {
+      file: required(isString, 'a string'),
+      line: required(isPositiveInteger, 'a line number'),
+      column: required(isPositiveInteger, 'a column number'),
+      endLine: required(isPositiveInteger, 'a line number'),
+      endColumn: required(isPositiveInteger, 'a column number'),
+      rule: required(isString, 'a string'),
+      severity: required(oneOf(['error', 'warning']), '"error" or "warning"'),
+      message: required(isString, 'a string'),
+    });
+  });
+  return report;
+}
+
 /**
  * The results of the files that ran before a run failed (`details.results`, mmk 1.6 and later),
  * or null when mmk didn't report them.
@@ -205,6 +340,15 @@ function optional(check: (value: unknown) => boolean, expected: string): FieldRu
 const isString = (value: unknown): boolean => typeof value === 'string';
 const isBoolean = (value: unknown): boolean => typeof value === 'boolean';
 const isNumber = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
+const isPositiveInteger = (value: unknown): boolean =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1;
+const ROLLBACK_STEPS: readonly RollbackStep[] = ['up', 'down', 'up-again'];
+const isFailure = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value.message === 'string' &&
+  (value.code === undefined || typeof value.code === 'string') &&
+  (value.cause === undefined || typeof value.cause === 'string') &&
+  (value.location === undefined || typeof value.location === 'string');
 const isSha256 = (value: unknown): boolean =>
   typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const isIsoDate = (value: unknown): boolean =>

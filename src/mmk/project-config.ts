@@ -1,8 +1,8 @@
 import {
   type JsonOutput,
   type MmkInvocation,
-  MmkProcessError,
   type RunOptions,
+  isUnknownCommand,
   runMmkJson,
   runNodeJson,
 } from './cli.js';
@@ -60,7 +60,7 @@ export async function readProjectConfig(
     const output = await readers.cli(invocation, ['config'], options);
     return { config: parseProjectConfig(output.value, 'config'), via: 'cli' };
   } catch (error) {
-    if (!isUnknownConfigCommand(error)) {
+    if (!isUnknownCommand(error, 'config')) {
       throw error;
     }
   }
@@ -71,15 +71,6 @@ export async function readProjectConfig(
     options,
   );
   return { config: parseProjectConfig(output.value, 'resolveConfig()'), via: 'library' };
-}
-
-/** True when mmk refused `config` because it doesn't have that command (1.5 and earlier) */
-function isUnknownConfigCommand(error: unknown): boolean {
-  return (
-    error instanceof MmkProcessError &&
-    error.kind === 'bad-output' &&
-    /unknown command 'config'/.test(error.stderr)
-  );
 }
 
 /**

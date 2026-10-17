@@ -193,6 +193,12 @@
         "command": "mmk.undoAppliedEdit",
         "title": "Undo my edit to an applied migration",
         "category": "mmk"
+      },
+      {
+        "command": "mmk.testRollback",
+        "title": "Test rollback (temporary database)",
+        "category": "mmk",
+        "icon": "$(beaker)"
       }
     ],
     "menus": {
@@ -298,6 +304,11 @@
           "command": "mmk.selectEnvironment",
           "when": "view == mmk.migrations && viewItem == mmk.env",
           "group": "inline@2"
+        },
+        {
+          "command": "mmk.testRollback",
+          "when": "view == mmk.migrations && viewItem =~ /^mmk\\.migration\\.(pending|applied)$/",
+          "group": "1_run@3"
         }
       ],
       "commandPalette": [
@@ -364,6 +375,10 @@
         {
           "command": "mmk.undoAppliedEdit",
           "when": "false"
+        },
+        {
+          "command": "mmk.testRollback",
+          "when": "mmk.hasProject"
         }
       ],
       "editor/title": [

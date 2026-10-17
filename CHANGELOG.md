@@ -33,6 +33,13 @@ All notable changes to this extension are documented here.
 - **Show applied version** finds the commit whose version has the recorded checksum and opens it
   next to your file. **Restore applied version** puts it back; **Undo my edit** drops an unsaved
   edit.
+- **Rollback tests in Test Explorer:** every migration with its `up`, `down` and `up again`
+  steps, run by `mmk test-rollback` on a temporary database that mmk drops afterwards (your
+  database isn't touched). A failure shows mmk's message at the line that threw. Also from the
+  *Test rollback* run link and the button after a run.
+- **Lint findings** from `mmk lint` as warnings and errors in the editor and the Problems panel.
+- Rollback tests and lint need a mongo-migrate-kit that has those commands; with an older one,
+  Test Explorer says so.
 
 ## 0.1.0 (pre-release) · 2026-10-17
 

@@ -123,6 +123,7 @@ suite('Local workflow in the fixture workspace (A1 → A2 → A3)', () => {
       'Run up on local',
       'Dry run',
       'Run down appears once up has run on local',
+      'Test rollback',
     ]);
 
     // A3: run up, then the links and the sidebar show it applied in a new batch.
@@ -138,7 +139,7 @@ suite('Local workflow in the fixture workspace (A1 → A2 → A3)', () => {
     assert.equal(rowOf(file)?.status, 'applied');
     const applied = await runLinks(uri);
     assert.match(applied[0] ?? '', /^\$\(check\) Applied on local · batch 2 · \d+ ms$/);
-    assert.deepEqual(applied.slice(1), ['Redo', 'Run down on local']);
+    assert.deepEqual(applied.slice(1), ['Redo', 'Run down on local', 'Test rollback']);
     assert.ok(
       api.sidebar().some((line) => /^ {2}Batch 2 · .+ · 1$/.test(line)),
       api.sidebar().join('\n'),

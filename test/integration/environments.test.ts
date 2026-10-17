@@ -122,6 +122,7 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
       'Dry run',
       'staging: applied',
       'Run down appears once up has run on local',
+      'Test rollback',
     ]);
   });
 

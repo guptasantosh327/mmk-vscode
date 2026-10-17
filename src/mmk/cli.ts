@@ -306,6 +306,19 @@ function execNode(
 }
 
 /**
+ * True when mmk refused `command` because this version doesn't have it (commander's
+ * `unknown command '<name>'`). The way to tell an older mmk from a newer one without guessing
+ * from its version number.
+ */
+export function isUnknownCommand(error: unknown, command: string): boolean {
+  return (
+    error instanceof MmkProcessError &&
+    error.kind === 'bad-output' &&
+    error.stderr.includes(`unknown command '${command}'`)
+  );
+}
+
+/**
  * Refuse arguments that would put a connection string on the command line, where every user
  * on the machine can read it (`ps`). Connection strings go in `MMK_URI` instead.
  */

@@ -5,10 +5,12 @@ import { EnvironmentRegistry } from './commands/environment-registry.js';
 import { registerEnvironmentCommands } from './commands/environments.js';
 import { registerMiscCommands } from './commands/misc.js';
 import { registerRunCommands } from './commands/run.js';
+import type { LintReport } from './mmk/contract.js';
 import type { Connection } from './mmk/environments.js';
 import { type Logger, createLogger } from './mmk/log.js';
 import { discoverProjects } from './mmk/project.js';
 import { MmkStore, type ProjectSnapshot } from './mmk/store.js';
+import { RollbackTests, registerRollbackCommand } from './testing/rollback.js';
 import {
   AppliedProtection,
   type EditedState,
@@ -17,6 +19,7 @@ import {
 import { BranchWatch } from './views/branch-watch.js';
 import { RunLinksProvider } from './views/codelens.js';
 import { MigrationDecorations } from './views/decorations.js';
+import { LintDiagnostics } from './views/lint-diagnostics.js';
 import { registerMatrix } from './views/matrix/panel.js';
 import { SIDEBAR_VIEW, type SidebarNode, SidebarProvider } from './views/sidebar.js';
 import { StatusBar } from './views/statusbar.js';
@@ -36,6 +39,10 @@ export interface MmkTestApi {
   checkBranch(root: string, branch: string | null): Promise<string[]>;
   /** Check an open migration against what ran now; its edited state, or undefined */
   checkApplied(document: vscode.TextDocument): Promise<EditedState | undefined>;
+  /** The rollback tests in Test Explorer */
+  rollbackTests: RollbackTests;
+  /** Run `mmk lint` on a project now; mmk's report, or undefined when it can't */
+  lint(dir: string): Promise<LintReport | undefined>;
 }
 
 /**
@@ -69,6 +76,8 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
   const watchers = new ProjectWatchers(store);
   const contextKeys = new ContextKeys();
   const branchWatch = new BranchWatch(deps);
+  const rollbackTests = new RollbackTests(deps);
+  const lint = new LintDiagnostics(deps);
 
   // Snapshots change several times per read; redraw once per burst.
   let redrawScheduled = false;
@@ -126,6 +135,9 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     environments,
     branchWatch,
     protection,
+    rollbackTests,
+    lint,
+    registerRollbackCommand(deps, rollbackTests),
     protection.onDidChangeState(() => {
       runLinks.refresh();
       decorations.refresh();
@@ -182,6 +194,8 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     environments,
     checkBranch: (root, branch) => branchWatch.checkAfterSwitch(root, branch),
     checkApplied: (document) => protection.check(document),
+    rollbackTests,
+    lint: (dir) => lint.lint(dir),
   };
 }
 
