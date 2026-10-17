@@ -2,7 +2,7 @@
 
 All notable changes to this extension are documented here.
 
-## 1.0.0 · unreleased
+## 1.0.0 · 2026-10-18
 
 The first release. (0.1.0 was prepared as a pre-release and never published.) It needs
 mongo-migrate-kit 1.5.0 or later. The applied-file warning and read-only database users switch on
