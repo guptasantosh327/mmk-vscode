@@ -365,3 +365,19 @@ environment, and need the modal before rolling back a batch.
 
 **Exit criteria:** from the console alone, plan and apply local's pending migrations, roll back a
 batch and compare every environment, with nothing written to a read-only environment.
+
+*Built as (so far):*
+- **Task 1 and 2 (C1–C4):** `src/mmk/console.ts` builds the console from `buildMatrix` and
+  `buildStatusModel`: tabs with each environment's pending and needs-attention counts, the four
+  filters, the rows, the picked migration (the user's pick, else the first pending on the selected
+  environment) with its record on each environment, the buttons the selected environment allows,
+  the CLI arguments, the latest three batches, and a notice (read-only, or files edited after they
+  ran). It decides nothing about migrations: every state is a matrix cell, so mmk's verdict.
+- The matrix panel became `src/views/console/panel.ts` (`media/console/`); `mmk.openConsole`
+  opens it and `mmk.compareEnvironments` opens it on *Only differences*. The webview's messages
+  are checked field by field (`isConsoleMessage`), and an action runs only if the picked
+  migration's detail offers it, through the existing `mmk.*` command with `{ dir, file }`.
+- The CLI line is Copy CLI command's: `terminalCommand`, and on another environment `MMK_URI`
+  as a placeholder and `MMK_DB` from the stored connection.
+- The webview was checked in headless Chrome with Dark Modern's colours (no script errors; C1–C4
+  as drawn). Integration tests drive the panel through `receive()`.

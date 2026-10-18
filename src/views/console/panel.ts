@@ -4,73 +4,71 @@ import * as vscode from 'vscode';
 import { type Deps, relativeDir, resolveProject } from '../../commands/context.js';
 import { currentBranch, defaultRemoteRef } from '../../git/branches.js';
 import { copyRefFolder } from '../../git/ref-files.js';
+import { terminalCommand } from '../../mmk/cli.js';
+import {
+  type ConsoleAction,
+  type ConsoleFilter,
+  type ConsoleMessage,
+  type ConsoleModel,
+  buildConsole,
+  isConsoleMessage,
+} from '../../mmk/console.js';
 import { parseStatusRows } from '../../mmk/contract.js';
 import type { WireStatusRow } from '../../mmk/contract.js';
-import { type CellState, type MatrixInput, buildMatrix } from '../../mmk/matrix.js';
-import { formatDay } from '../../mmk/model.js';
+import type { Environment } from '../../mmk/environments.js';
+import { type MatrixInput, buildMatrix } from '../../mmk/matrix.js';
 import type { ProjectSnapshot } from '../../mmk/store.js';
 
 /** Where the compared files come from */
 type Source = { kind: 'branch' } | { kind: 'ref'; ref: string };
 
-/** A cell as the webview shows it */
-interface CellView {
-  kind: CellState['kind'];
-  label: string;
-  date: string;
-  title: string;
-}
-
 /** Everything the webview draws, sent over postMessage */
-interface MatrixView {
+export interface ConsoleView {
   title: string;
   subtitle: string;
   source: 'branch' | 'ref';
   refLabel: string | null;
   loading: boolean;
   error: string | null;
+  selected: string;
+  filter: ConsoleFilter;
   columns: Array<{ name: string; readOnly: boolean; state: string; title: string }>;
-  rows: Array<{
-    file: string;
-    label: string;
-    stamp: string;
-    cells: CellView[];
-    note: string;
-    differs: boolean;
-    openable: boolean;
-  }>;
-  summary: string[];
-  footer: string;
+  model: ConsoleModel;
+  /** The picked migration's CLI command, as Copy CLI command would copy it */
+  cli: string;
 }
 
-/** Messages from the webview */
-type Incoming =
-  | { type: 'ready' }
-  | { type: 'refresh' }
-  | { type: 'source'; value: 'branch' | 'ref' }
-  | { type: 'open'; file: string }
-  | { type: 'select'; environment: string };
-
-/** Register "mmk: Compare all environments" (design C2) */
-export function registerMatrix(deps: Deps, extensionUri: vscode.Uri): vscode.Disposable[] {
-  const panels = new Map<string, MatrixPanel>();
-  return [
-    vscode.commands.registerCommand('mmk.compareEnvironments', async (target?: unknown) => {
-      const project = await resolveProject(deps, target);
-      if (!project) {
-        return undefined;
-      }
-      const existing = panels.get(project.dir);
-      if (existing) {
-        existing.reveal();
-        return existing;
-      }
-      const panel = new MatrixPanel(deps, extensionUri, project.dir, () =>
-        panels.delete(project.dir),
-      );
+/**
+ * Register the migration console (design C1–C4): "mmk: Open migration console", and "Compare
+ * all environments", which opens it with *Only differences*. Both return the panel, for tests.
+ */
+export function registerConsole(deps: Deps, extensionUri: vscode.Uri): vscode.Disposable[] {
+  const panels = new Map<string, ConsolePanel>();
+  const open = async (
+    target: unknown,
+    filter?: ConsoleFilter,
+  ): Promise<ConsolePanel | undefined> => {
+    const project = await resolveProject(deps, target);
+    if (!project) {
+      return undefined;
+    }
+    let panel = panels.get(project.dir);
+    if (panel) {
+      panel.reveal();
+    } else {
+      panel = new ConsolePanel(deps, extensionUri, project.dir, () => panels.delete(project.dir));
       panels.set(project.dir, panel);
-      return panel;
-    }),
+    }
+    if (filter) {
+      panel.setFilter(filter);
+    }
+    return panel;
+  };
+  return [
+    vscode.commands.registerCommand('mmk.openConsole', (target?: unknown) => open(target)),
+    vscode.commands.registerCommand('mmk.compareEnvironments', (target?: unknown) =>
+      open(target, 'diff'),
+    ),
     deps.store.onDidChange(() => {
       for (const panel of panels.values()) {
         panel.storeChanged();
@@ -81,13 +79,17 @@ export function registerMatrix(deps: Deps, extensionUri: vscode.Uri): vscode.Dis
 }
 
 /**
- * The environments matrix: the files of your branch (or of the default remote branch) against
- * every environment's changelog. Read-only: it only runs `mmk status`.
+ * The migration console: every migration of a project against every environment's changelog,
+ * the picked one's records and actions, and the selected environment's batches. It runs mmk only
+ * through the store's reads and the existing commands, so the read-only rule, the confirmations
+ * and the results are the same as everywhere else.
  */
-export class MatrixPanel implements vscode.Disposable {
+export class ConsolePanel implements vscode.Disposable {
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];
   private source: Source = { kind: 'branch' };
+  private filter: ConsoleFilter = 'all';
+  private picked: string | null = null;
   /** Rows read with `status --dir <ref copy>`, by environment */
   private refRows: Map<string, { rows: WireStatusRow[] | null; error: string | null }> | null =
     null;
@@ -96,11 +98,14 @@ export class MatrixPanel implements vscode.Disposable {
   private branch: string | null = null;
   private defaultRef: string | null = null;
   private updatedAt = new Date();
+  /** Each environment's database name, for the CLI command (null for local) */
+  private readonly databases = new Map<string, string | null>();
   private redrawTimer: ReturnType<typeof setTimeout> | undefined;
+  private disposed = false;
 
   constructor(
     private readonly deps: Deps,
-    private readonly extensionUri: vscode.Uri,
+    extensionUri: vscode.Uri,
     private readonly dir: string,
     private readonly onDispose: () => void,
   ) {
@@ -111,10 +116,10 @@ export class MatrixPanel implements vscode.Disposable {
       'codicons',
       'dist',
     );
-    const media = vscode.Uri.joinPath(extensionUri, 'media', 'matrix');
+    const media = vscode.Uri.joinPath(extensionUri, 'media', 'console');
     this.panel = vscode.window.createWebviewPanel(
-      'mmk.matrix',
-      `mmk: Environments — ${path.basename(dir)}`,
+      'mmk.console',
+      `Migrations — ${path.basename(dir)}`,
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -126,13 +131,23 @@ export class MatrixPanel implements vscode.Disposable {
     this.panel.webview.html = this.html(codicons, media);
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
-      this.panel.webview.onDidReceiveMessage((message: Incoming) => void this.receive(message)),
+      this.panel.webview.onDidReceiveMessage((message: unknown) => {
+        if (isConsoleMessage(message)) {
+          void this.receive(message);
+        }
+      }),
     );
     void this.loadGit();
   }
 
   reveal(): void {
     this.panel.reveal();
+  }
+
+  /** Show only the migrations one filter keeps */
+  setFilter(filter: ConsoleFilter): void {
+    this.filter = filter;
+    this.post();
   }
 
   /** The store read something new: redraw (only the branch view follows it live) */
@@ -144,6 +159,10 @@ export class MatrixPanel implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     if (this.redrawTimer) {
       clearTimeout(this.redrawTimer);
     }
@@ -154,9 +173,95 @@ export class MatrixPanel implements vscode.Disposable {
     this.onDispose();
   }
 
-  /** The view model as the webview gets it; for tests */
-  view(): MatrixView {
+  /** The view as the webview gets it; for tests */
+  view(): ConsoleView {
     return this.buildView();
+  }
+
+  /** Handle one message from the webview (integration tests send them too) */
+  async receive(message: ConsoleMessage): Promise<unknown> {
+    switch (message.type) {
+      case 'ready':
+        this.post();
+        return undefined;
+      case 'refresh':
+        return this.refresh();
+      case 'source':
+        if (message.value === 'ref' && this.defaultRef) {
+          this.source = { kind: 'ref', ref: this.defaultRef };
+          this.refRows = null;
+          return this.refresh();
+        }
+        this.source = { kind: 'branch' };
+        this.post();
+        return undefined;
+      case 'filter':
+        this.setFilter(message.value);
+        return undefined;
+      case 'environment':
+        await this.deps.environments.select(message.name);
+        return undefined;
+      case 'pick':
+        this.picked = message.file;
+        this.post();
+        return undefined;
+      case 'action':
+        return this.runAction(message.action);
+      case 'copy':
+        return this.copy();
+      case 'open':
+        return this.open(message.file);
+      case 'create':
+        return vscode.commands.executeCommand('mmk.createMigration');
+      case 'plan':
+        return vscode.commands.executeCommand('mmk.dryRun', { dir: this.dir });
+      case 'applyAll':
+        return vscode.commands.executeCommand('mmk.upAll', { dir: this.dir });
+      case 'addEnvironment':
+        return vscode.commands.executeCommand('mmk.addEnvironment');
+    }
+  }
+
+  /**
+   * Run one of the buttons the detail panel shows, on the picked migration. Only a button the
+   * model offers runs, and the command checks the environment again.
+   */
+  private async runAction(action: ConsoleAction): Promise<unknown> {
+    const detail = this.buildView().model.detail;
+    if (!detail?.buttons.some((button) => button.action === action)) {
+      return undefined;
+    }
+    if (action === 'showAppliedVersion') {
+      const file = this.fileUri(detail.file);
+      return file ? vscode.commands.executeCommand('mmk.showAppliedVersion', file) : undefined;
+    }
+    return vscode.commands.executeCommand(`mmk.${action}`, { dir: this.dir, file: detail.file });
+  }
+
+  private async copy(): Promise<string | undefined> {
+    const { cli } = this.buildView();
+    if (!cli) {
+      return undefined;
+    }
+    await vscode.env.clipboard.writeText(cli);
+    void vscode.window.showInformationMessage(`Copied: ${cli}`);
+    return cli;
+  }
+
+  private async open(file: string): Promise<void> {
+    const uri = this.source.kind === 'branch' ? this.fileUri(file) : undefined;
+    if (uri) {
+      await vscode.window.showTextDocument(uri);
+    }
+  }
+
+  /** The file in the project's migrations folder, when it's one mmk knows */
+  private fileUri(file: string): vscode.Uri | undefined {
+    const config = this.deps.store.snapshot(this.dir)?.config;
+    const known = this.deps.store.snapshot(this.dir)?.rows?.some((row) => row.file === file);
+    return config && known
+      ? vscode.Uri.file(path.join(config.migrationsDir, path.basename(file)))
+      : undefined;
   }
 
   private async loadGit(): Promise<void> {
@@ -167,39 +272,6 @@ export class MatrixPanel implements vscode.Disposable {
       defaultRemoteRef(folder),
     ]);
     this.post();
-  }
-
-  private async receive(message: Incoming): Promise<void> {
-    switch (message.type) {
-      case 'ready':
-        this.post();
-        return;
-      case 'refresh':
-        await this.refresh();
-        return;
-      case 'source':
-        if (message.value === 'ref' && this.defaultRef) {
-          this.source = { kind: 'ref', ref: this.defaultRef };
-          this.refRows = null;
-          await this.refresh();
-        } else {
-          this.source = { kind: 'branch' };
-          this.post();
-        }
-        return;
-      case 'open': {
-        const config = this.deps.store.snapshot(this.dir)?.config;
-        if (config && this.source.kind === 'branch') {
-          await vscode.window.showTextDocument(
-            vscode.Uri.file(path.join(config.migrationsDir, path.basename(message.file))),
-          );
-        }
-        return;
-      }
-      case 'select':
-        await this.deps.environments.select(message.environment);
-        return;
-    }
   }
 
   /** Read every environment again: the store's reads, or `status --dir` on the ref's files */
@@ -265,17 +337,27 @@ export class MatrixPanel implements vscode.Disposable {
   }
 
   private post(): void {
-    void this.panel.webview.postMessage({ type: 'model', view: this.buildView() });
+    if (!this.disposed) {
+      void this.panel.webview.postMessage({ type: 'model', view: this.buildView() });
+    }
   }
 
-  private buildView(): MatrixView {
+  private buildView(): ConsoleView {
     const project = this.deps.store.snapshot(this.dir);
     const environments = this.deps.store.environments();
+    const selected = this.deps.store.selected();
     const filesLabel = this.source.kind === 'ref' ? this.source.ref : 'your branch';
-    const inputs: MatrixInput[] = environments.map((environment) =>
-      this.input(project, environment.name, environment),
-    );
-    const model = buildMatrix(inputs, filesLabel);
+    const inputs = environments.map((environment) => this.input(project, environment));
+    const matrix = buildMatrix(inputs, filesLabel);
+    const model = buildConsole({
+      matrix,
+      environments,
+      selected: selected.name,
+      filter: this.filter,
+      picked: this.picked,
+      rows: Object.fromEntries(inputs.map((input) => [input.environment.name, input.rows])),
+      filesAreLocal: this.source.kind === 'branch',
+    });
     const readAt = environments
       .map((environment) => project?.environments[environment.name]?.readAt)
       .filter((value): value is Date => value instanceof Date);
@@ -289,21 +371,16 @@ export class MatrixPanel implements vscode.Disposable {
         : this.branch
           ? `Files on branch ${this.branch}`
           : 'Files in your working tree';
-    const readOnly = environments.filter((environment) => environment.readOnly);
-    const missing = readOnly
-      .map((environment) => ({
-        name: environment.name,
-        count: model.rows.filter((row) => row.cells[environment.name]?.kind === 'pending').length,
-      }))
-      .filter((item) => item.count > 0);
     return {
-      title: `Environments${project ? ` · ${relativeDir(project.dir) || path.basename(project.dir)}` : ''}`,
-      subtitle: `${files}, compared with each database's changelog · read-only · updated ${clock(updated)}`,
+      title: project ? relativeDir(project.dir) || path.basename(project.dir) : 'Migrations',
+      subtitle: `${files}, records from each environment's changelog · updated ${clock(updated)}`,
       source: this.source.kind,
       refLabel: this.defaultRef,
       loading: this.loading || inputs.some((input) => input.state === 'loading'),
       error: this.error,
-      columns: model.columns.map((column) => ({
+      selected: selected.name,
+      filter: this.filter,
+      columns: matrix.columns.map((column) => ({
         name: column.name,
         readOnly: column.readOnly,
         state: column.state,
@@ -314,38 +391,38 @@ export class MatrixPanel implements vscode.Disposable {
               ? `${column.name} isn't set up for this project: run "mmk: Edit environment…"`
               : `${column.name}: ${column.database ?? ''}${column.readOnly ? ' (read-only)' : ''}`,
       })),
-      rows: model.rows.map((row) => ({
-        file: row.file,
-        label: row.label,
-        stamp: row.stamp ?? '',
-        cells: model.columns.map((column) =>
-          cellView(row.cells[column.name] ?? { kind: 'unknown' }, column.name, filesLabel),
-        ),
-        note: row.note,
-        differs: row.differs,
-        openable: this.source.kind === 'branch' && row.inFiles,
-      })),
-      summary: model.summary,
-      footer: [
-        'Each database is read with one query on its changelog (mmk status).',
-        readOnly.length > 0
-          ? `${list(readOnly.map((environment) => environment.name))} ${readOnly.length === 1 ? 'is' : 'are'} read-only here${missing.length > 0 ? `: to apply the ${missing.map((item) => `${item.count} that ${item.name} is missing`).join(' and the ')}, merge and let CI deploy` : ''}.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
+      model,
+      cli: model.detail ? this.cli(selected, model.detail.cli) : '',
     };
   }
 
-  private input(
-    project: ProjectSnapshot | undefined,
-    name: string,
-    environment: MatrixInput['environment'],
-  ): MatrixInput {
-    const status = project?.environments[name];
+  /**
+   * The CLI command, as Copy CLI command writes it: on another environment, `MMK_URI` holds a
+   * placeholder (the connection string is never copied) and `MMK_DB` the database.
+   */
+  private cli(environment: Environment, args: readonly string[]): string {
+    const command = terminalCommand(args, relativeDir(this.dir));
+    if (environment.local) {
+      return command;
+    }
+    if (!this.databases.has(environment.name)) {
+      this.databases.set(environment.name, null);
+      void this.deps.environments.connection(this.dir, environment.name).then((connection) => {
+        this.databases.set(environment.name, connection?.dbName ?? null);
+        this.post();
+      });
+    }
+    const database = this.databases.get(environment.name) ?? `<${environment.name} database>`;
+    const prefix = `MMK_URI='<${environment.name} connection string>' MMK_DB=${database} `;
+    const at = command.indexOf('npx ');
+    return `${command.slice(0, at)}${prefix}${command.slice(at)}`;
+  }
+
+  private input(project: ProjectSnapshot | undefined, environment: Environment): MatrixInput {
+    const status = project?.environments[environment.name];
     const database = status?.database ?? null;
     if (this.source.kind === 'ref') {
-      const read = this.refRows?.get(name);
+      const read = this.refRows?.get(environment.name);
       if (status?.connected === false) {
         return { environment, rows: null, state: 'not-set-up', database };
       }
@@ -371,8 +448,8 @@ export class MatrixPanel implements vscode.Disposable {
   private html(codicons: vscode.Uri, media: vscode.Uri): string {
     const webview = this.panel.webview;
     const nonce = randomBytes(16).toString('base64');
-    const css = webview.asWebviewUri(vscode.Uri.joinPath(media, 'matrix.css'));
-    const js = webview.asWebviewUri(vscode.Uri.joinPath(media, 'matrix.js'));
+    const css = webview.asWebviewUri(vscode.Uri.joinPath(media, 'console.css'));
+    const js = webview.asWebviewUri(vscode.Uri.joinPath(media, 'console.js'));
     const icons = webview.asWebviewUri(vscode.Uri.joinPath(codicons, 'codicon.css'));
     return `<!DOCTYPE html>
 <html lang="en">
@@ -382,7 +459,7 @@ export class MatrixPanel implements vscode.Disposable {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${icons}">
 <link rel="stylesheet" href="${css}">
-<title>mmk: Environments</title>
+<title>Migrations</title>
 </head>
 <body>
 <main id="app" aria-live="polite"></main>
@@ -392,75 +469,6 @@ export class MatrixPanel implements vscode.Disposable {
   }
 }
 
-function cellView(cell: CellState, environment: string, filesLabel: string): CellView {
-  const date = 'appliedAt' in cell && cell.appliedAt ? shortDate(cell.appliedAt) : '';
-  const batch = 'batch' in cell && cell.batch !== null ? ` in batch ${cell.batch}` : '';
-  switch (cell.kind) {
-    case 'applied':
-      return {
-        kind: cell.kind,
-        label: 'Applied',
-        date,
-        title: `Applied on ${environment}${batch}`,
-      };
-    case 'edited':
-      return {
-        kind: cell.kind,
-        label: 'Edited',
-        date,
-        title: `Applied on ${environment}${batch}, and the file changed after it ran`,
-      };
-    case 'no-file':
-      return {
-        kind: cell.kind,
-        label:
-          filesLabel === 'your branch'
-            ? 'Applied, file not in your branch'
-            : `Applied, not on ${filesLabel}`,
-        date,
-        title: `Applied on ${environment}${batch}, but the file isn't in ${filesLabel}`,
-      };
-    case 'pending':
-      return {
-        kind: cell.kind,
-        label: 'Pending',
-        date: '',
-        title: `Not applied on ${environment}`,
-      };
-    case 'unadopted':
-      return {
-        kind: cell.kind,
-        label: 'Needs adopt',
-        date: '',
-        title: `Applied on ${environment} before this repo had a namespace: run mmk namespace adopt`,
-      };
-    case 'none':
-      return {
-        kind: cell.kind,
-        label: '—',
-        date: '',
-        title: `No file and no record on ${environment}`,
-      };
-    case 'unknown':
-      return { kind: cell.kind, label: '?', date: '', title: `${environment} wasn't read` };
-  }
-}
-
-/** `today`, or `13 Oct` (with the year when it isn't this one) */
-function shortDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  return date.toDateString() === new Date().toDateString() ? 'today' : formatDay(date);
-}
-
 function clock(date: Date): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function list(names: readonly string[]): string {
-  return names.length <= 1
-    ? (names[0] ?? '')
-    : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }

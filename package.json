@@ -169,10 +169,16 @@
         "icon": "$(output)"
       },
       {
+        "command": "mmk.openConsole",
+        "title": "Open migration console",
+        "category": "mmk",
+        "icon": "$(table)"
+      },
+      {
         "command": "mmk.compareEnvironments",
         "title": "Compare all environments",
         "category": "mmk",
-        "icon": "$(table)"
+        "icon": "$(diff-multiple)"
       },
       {
         "command": "mmk.addEnvironment",
@@ -218,7 +224,7 @@
           "group": "navigation@1"
         },
         {
-          "command": "mmk.compareEnvironments",
+          "command": "mmk.openConsole",
           "when": "view == mmk.migrations && mmk.hasProject",
           "group": "navigation@2"
         },
@@ -350,6 +356,10 @@
         },
         {
           "command": "mmk.selectEnvironment",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.openConsole",
           "when": "mmk.hasProject"
         },
         {

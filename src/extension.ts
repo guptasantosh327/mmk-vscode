@@ -16,8 +16,8 @@ import {
 } from './views/applied-protection.js';
 import { BranchWatch } from './views/branch-watch.js';
 import { RunLinksProvider } from './views/codelens.js';
+import { registerConsole } from './views/console/panel.js';
 import { MigrationDecorations } from './views/decorations.js';
-import { registerMatrix } from './views/matrix/panel.js';
 import { SIDEBAR_VIEW, type SidebarNode, SidebarProvider } from './views/sidebar.js';
 import { StatusBar } from './views/statusbar.js';
 
@@ -149,7 +149,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     ...registerRunCommands(deps),
     ...registerMiscCommands(deps),
     ...registerEnvironmentCommands(deps),
-    ...registerMatrix(deps, context.extensionUri),
+    ...registerConsole(deps, context.extensionUri),
     registerCreateCommand(deps),
     vscode.commands.registerCommand('mmk.refresh', async () => {
       await rediscover();

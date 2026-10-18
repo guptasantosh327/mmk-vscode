@@ -2,6 +2,16 @@
 
 All notable changes to this extension are documented here.
 
+## Unreleased
+
+- **Migration console** (`mmk: Open migration console`): every migration against every
+  environment in one editor tab, with environment tabs, filters (*Pending*, *Needs attention*,
+  *Only differences*), files from your branch or `origin/main`, the picked migration's record on
+  each environment with the actions the selected one allows, its CLI command, and the latest
+  batches. It replaces the environments matrix; *Compare all environments* opens it on *Only
+  differences*. Its buttons run the same commands as the rest of the extension, so read-only
+  environments and confirmations work the same way.
+
 ## 1.0.1 · unreleased
 
 - **Renamed to Mongo Migrate Kit**, the library's name, with a new extension ID:

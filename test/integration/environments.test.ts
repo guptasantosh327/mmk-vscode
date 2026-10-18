@@ -6,7 +6,7 @@ import { MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import * as vscode from 'vscode';
 import type { MmkTestApi } from '../../src/extension.js';
-import type { MatrixPanel } from '../../src/views/matrix/panel.js';
+import type { ConsolePanel } from '../../src/views/console/panel.js';
 import { REPO_ROOT, getExtension } from './helpers.js';
 
 const MMK_SCRIPT = path.join(REPO_ROOT, 'node_modules/mongo-migrate-kit/dist/mmk.cjs');
@@ -187,14 +187,16 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     );
   });
 
-  test('compares every environment in the matrix, with notes (C2)', async () => {
-    const panel = await vscode.commands.executeCommand<MatrixPanel>('mmk.compareEnvironments', {
+  test('compares every environment in the console, read-only on staging (C2–C4)', async () => {
+    const panel = await vscode.commands.executeCommand<ConsolePanel>('mmk.compareEnvironments', {
       dir: workspaceDir,
     });
-    assert.ok(panel, 'The matrix should open');
+    assert.ok(panel, 'The console should open');
     await api.idle();
-    const view = panel.view();
+    let view = panel.view();
 
+    assert.equal(view.filter, 'diff');
+    assert.equal(view.selected, 'staging');
     assert.deepEqual(
       view.columns.map((column) => [column.name, column.readOnly]),
       [
@@ -203,18 +205,45 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
       ],
     );
     assert.deepEqual(
-      view.rows.map((row) => [row.label, row.cells.map((cell) => cell.label), row.note]),
+      view.model.rows.map((row) => [row.label, row.cells.map((cell) => cell.text), row.note]),
+      [['add-email-index.js', ['pending', 'batch 2'], 'Not on local yet']],
+    );
+    assert.deepEqual(
+      view.model.chips.map((chip) => [chip.id, chip.count]),
       [
-        ['create-users.js', ['Applied', 'Applied'], ''],
-        ['add-email-index.js', ['Pending', 'Applied'], 'Not on local yet'],
-        ['backfill-user-status.js', ['Pending', 'Pending'], ''],
+        ['all', 3],
+        ['pending', 1],
+        ['attention', 0],
+        ['diff', 1],
       ],
     );
-    assert.deepEqual(view.summary, ['local is missing 1 that staging has']);
-    assert.match(
-      view.subtitle,
-      /compared with each database's changelog · read-only · updated \d\d:\d\d$/,
+    assert.match(view.subtitle, /records from each environment's changelog · updated \d\d:\d\d$/);
+
+    await panel.receive({ type: 'filter', value: 'all' });
+    view = panel.view();
+    assert.deepEqual(
+      view.model.rows.map((row) => [row.label, row.cells.map((cell) => cell.text)]),
+      [
+        ['create-users.js', ['batch 1', 'batch 1']],
+        ['add-email-index.js', ['pending', 'batch 2']],
+        ['backfill-user-status.js', ['pending', 'pending']],
+      ],
     );
+    assert.equal(view.model.notice?.kind, 'read-only');
+    assert.equal(view.model.detail?.file, BACKFILL);
+    assert.deepEqual(view.model.detail?.buttons, [
+      { action: 'dryRun', label: 'Plan on staging', primary: false },
+    ]);
+    assert.match(
+      view.cli,
+      /^MMK_URI='<staging connection string>' MMK_DB=(mmk_staging|<staging database>) npx mmk dry-run up 20260103000000-backfill-user-status\.js$/,
+    );
+
+    // A button the console doesn't offer does nothing, even when the webview asks for it.
+    const before = await stagingRecords();
+    assert.equal(await panel.receive({ type: 'action', action: 'up' }), undefined);
+    await api.idle();
+    assert.equal(await stagingRecords(), before);
     panel.dispose();
   });
 
@@ -230,6 +259,46 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
       ['applied'],
     );
     await api.idle();
+  });
+
+  test('runs up from the console on local, then offers to roll it back (C1, C2)', async () => {
+    const panel = await vscode.commands.executeCommand<ConsolePanel>('mmk.openConsole', {
+      dir: workspaceDir,
+    });
+    assert.ok(panel, 'The console should open');
+    await api.idle();
+    let view = panel.view();
+    assert.equal(view.selected, 'local');
+    assert.equal(view.model.notice, null);
+    assert.equal(view.model.detail?.file, BACKFILL);
+    assert.deepEqual(
+      view.model.detail?.buttons.map((button) => button.action),
+      ['up', 'dryRun'],
+    );
+    assert.equal(view.cli, `npx mmk up ${BACKFILL}`);
+
+    const results = (await panel.receive({ type: 'action', action: 'up' })) as Array<{
+      file: string;
+      status: string;
+    }>;
+    assert.deepEqual(
+      results.map((result) => [result.file, result.status]),
+      [[BACKFILL, 'applied']],
+    );
+    await api.idle();
+
+    view = panel.view();
+    const row = view.model.rows.find((candidate) => candidate.file === BACKFILL);
+    assert.match(row?.cells[0]?.text ?? '', /^batch \d+$/);
+    assert.deepEqual(
+      view.model.detail?.buttons.map((button) => button.action),
+      ['down', 'redo'],
+    );
+    assert.ok(
+      view.model.batches.some((batch) => batch.picked),
+      'Its batch should be marked',
+    );
+    panel.dispose();
   });
 
   test('after a checkout, names a local migration whose file is on another branch', async () => {

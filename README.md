@@ -58,10 +58,13 @@ whatever it shows, `npx mmk` says the same in a terminal.
   run links offer *Dry run* and *Copy CLI command*, and every write command refuses in code, not
   just in the UI. Deploys stay with your pipeline.
 - **The status bar** turns amber on staging and red on prod.
-- **Compare all environments:** every migration against every database, with notes like
-  "On staging, not prod" and "Only on local so far", an *Only differences* filter, and a switch to
+- **The migration console** (`mmk: Open migration console`, or the table icon in the mmk view):
+  every migration against every database in one editor tab. Pick an environment, filter to
+  *Pending*, *Needs attention* or *Only differences* (with notes like "On staging, not prod"), and
   compare the files on `origin/main` instead of your branch (copied from git, without touching your
-  checkout).
+  checkout). The migration you pick shows its record on each environment, the actions the selected
+  environment allows, the CLI command to copy, and the environment's latest batches.
+  *Compare all environments* opens it on *Only differences*.
 - **After a branch switch**, local migrations whose files are on another branch are named, with
   the branch.
 
