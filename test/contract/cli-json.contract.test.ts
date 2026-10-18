@@ -16,6 +16,7 @@ import {
   parseRunResults,
   parseStatusRows,
   parseUnlockResult,
+  runResultsOfFailure,
 } from '../../src/mmk/contract.js';
 import {
   type ContractProject,
@@ -399,6 +400,36 @@ describe('down --batch, for rolling back a batch (Phase 7)', () => {
 
     expect(error.failure.code).toBe('INVALID_ARGUMENT');
     expect(error.failure.message).toMatch(/No applied migrations found in batch 9/);
+  });
+});
+
+describe('a run that stops partway, for the console result (R10)', () => {
+  const project = withProject('contract_partial_run');
+
+  it('lists the files that ran first in details.results, the failed one last (none on 1.5)', async () => {
+    project().addMigration(
+      '20991231000000-throws.js',
+      `module.exports = {
+  async up() {
+    throw new Error('boom after the others');
+  },
+  async down() {},
+};
+`,
+    );
+
+    const error = await expectFailure(project().run(['up']));
+
+    expect(error.failure.code).toBe('MIGRATION_EXECUTION_FAILED');
+    const results = runResultsOfFailure(error.failure);
+    if (hasNextMmk()) {
+      expect(results?.map((result) => [result.file, result.status])).toEqual([
+        ...FIXTURE_FILES.map((file) => [file, 'applied']),
+        ['20991231000000-throws.js', 'error'],
+      ]);
+    } else {
+      expect(results).toBeNull();
+    }
   });
 });
 
