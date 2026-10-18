@@ -166,6 +166,10 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     assert.equal(await vscode.commands.executeCommand('mmk.down', applied), undefined);
     assert.equal(await vscode.commands.executeCommand('mmk.redo', applied), undefined);
     assert.equal(
+      await vscode.commands.executeCommand('mmk.downBatch', { dir: workspaceDir, batch: 1 }),
+      undefined,
+    );
+    assert.equal(
       await vscode.commands.executeCommand('mmk.unlock', { dir: workspaceDir }),
       undefined,
     );
@@ -244,6 +248,25 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     assert.equal(await panel.receive({ type: 'action', action: 'up' }), undefined);
     await api.idle();
     assert.equal(await stagingRecords(), before);
+
+    // The plan works on staging (a dry run), but applying it is refused, and nothing is asked.
+    const asked: string[] = [];
+    api.setConfirm((message) => {
+      asked.push(message);
+      return true;
+    });
+    const steps = (await panel.receive({ type: 'plan' })) as Array<{ file: string }>;
+    assert.deepEqual(
+      steps.map((step) => step.file),
+      [BACKFILL],
+    );
+    const plan = panel.view().drawer;
+    assert.equal(plan?.kind, 'plan');
+    assert.equal(plan?.kind === 'plan' && plan.readOnly, true);
+    assert.equal(await panel.receive({ type: 'applyPlan' }), undefined);
+    await api.idle();
+    assert.deepEqual(asked, []);
+    assert.equal(await stagingRecords(), before);
     panel.dispose();
   });
 
@@ -292,12 +315,82 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     assert.match(row?.cells[0]?.text ?? '', /^batch \d+$/);
     assert.deepEqual(
       view.model.detail?.buttons.map((button) => button.action),
-      ['down', 'redo'],
+      ['down', 'redo', 'downBatch'],
     );
     assert.ok(
       view.model.batches.some((batch) => batch.picked),
       'Its batch should be marked',
     );
+    panel.dispose();
+  });
+
+  test('rolls back a batch from the console only after the modal, then plans and applies again (C6–C9)', async () => {
+    const panel = await vscode.commands.executeCommand<ConsolePanel>('mmk.openConsole', {
+      dir: workspaceDir,
+    });
+    assert.ok(panel, 'The console should open');
+    await api.idle();
+    await panel.receive({ type: 'pick', file: BACKFILL });
+    const button = panel
+      .view()
+      .model.detail?.buttons.find((candidate) => candidate.action === 'downBatch');
+    assert.ok(button?.batch, 'An applied migration should offer to roll back its batch');
+    const batch = button.batch;
+    assert.equal(button.label, `Roll back batch ${batch}…`);
+
+    // Saying no runs nothing.
+    api.setConfirm(() => false);
+    assert.equal(await panel.receive({ type: 'action', action: 'downBatch' }), undefined);
+    await api.idle();
+    assert.equal(
+      api.store.snapshot(workspaceDir)?.rows?.find((row) => row.file === BACKFILL)?.status,
+      'applied',
+    );
+
+    const asked: string[] = [];
+    api.setConfirm((message) => {
+      asked.push(message);
+      return true;
+    });
+    const rolledBack = (await panel.receive({ type: 'action', action: 'downBatch' })) as {
+      title: string;
+      ok: boolean;
+      lines: Array<{ label: string; text: string }>;
+    };
+    assert.deepEqual(asked, [`Roll back batch ${batch} on local?`]);
+    assert.equal(rolledBack.title, `Rolled back batch ${batch} on local`);
+    assert.equal(rolledBack.ok, true);
+    assert.deepEqual(
+      rolledBack.lines.map((line) => [line.label, line.text]),
+      [['backfill-user-status.js', 'Rolled back']],
+    );
+    assert.equal(panel.view().drawer?.kind, 'result');
+    assert.equal(
+      api.store.snapshot(workspaceDir)?.rows?.find((row) => row.file === BACKFILL)?.status,
+      'pending',
+    );
+
+    // Plan, then apply: it runs as one batch and the result says so.
+    const steps = (await panel.receive({ type: 'plan' })) as Array<{ file: string }>;
+    assert.deepEqual(
+      steps.map((step) => step.file),
+      [BACKFILL],
+    );
+    const applied = (await panel.receive({ type: 'applyPlan' })) as {
+      title: string;
+      ok: boolean;
+      rollBackBatch: number | null;
+    };
+    assert.equal(applied.title, 'Applied 1 on local');
+    assert.equal(applied.ok, true);
+    assert.ok(applied.rollBackBatch, 'The result should offer to roll its batch back');
+    assert.equal(
+      api.store.snapshot(workspaceDir)?.rows?.find((row) => row.file === BACKFILL)?.status,
+      'applied',
+    );
+
+    await panel.receive({ type: 'closeDrawer' });
+    assert.equal(panel.view().drawer, null);
     panel.dispose();
   });
 

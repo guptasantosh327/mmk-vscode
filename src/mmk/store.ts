@@ -22,6 +22,7 @@ import {
 import type { Logger } from './log.js';
 import { type ConfigReaders, readProjectConfig } from './project-config.js';
 import type { ProjectState } from './project.js';
+import { redactMongoUri } from './redact.js';
 
 /** Why the last read of a project failed. `message` is mmk's own when mmk reported it */
 export interface ReadFailure {
@@ -139,6 +140,7 @@ interface Entry {
 export class MmkStore {
   private readonly entries = new Map<string, Entry>();
   private readonly listeners = new Set<() => void>();
+  private readonly outputListeners = new Set<(dir: string, line: string) => void>();
   private readonly runMmk: RunMmk;
   private readonly readers: ConfigReaders;
   private readonly connection: ConnectionLookup;
@@ -269,6 +271,15 @@ export class MmkStore {
   }
 
   /**
+   * Call `listener` with each line mmk writes to stderr (its own log) while a command started by
+   * {@link MmkStore.run} runs in a project, credentials hidden. Returns a disposable.
+   */
+  onDidOutput(listener: (dir: string, line: string) => void): { dispose: () => void } {
+    this.outputListeners.add(listener);
+    return { dispose: () => this.outputListeners.delete(listener) };
+  }
+
+  /**
    * Read config and status again, now. Resolves when reads that started after this call have
    * finished. Without `dir`, refreshes every project; without `environment`, every environment.
    */
@@ -377,7 +388,13 @@ export class MmkStore {
     try {
       return await this.runMmk(state.invocation, args, {
         env: connectionEnv(connection),
-        onStderrLine: (line) => this.log.mmkOutput(line),
+        onStderrLine: (line) => {
+          this.log.mmkOutput(line);
+          const shown = redactMongoUri(line);
+          for (const listener of this.outputListeners) {
+            listener(dir, shown);
+          }
+        },
       });
     } finally {
       this.update(entry, { running: null, runningOn: null });

@@ -1,7 +1,9 @@
-import type { WireStatusRow } from './contract.js';
+import type { RunResult } from 'mongo-migrate-kit';
+import type { Wire, WireStatusRow } from './contract.js';
 import type { Environment } from './environments.js';
 import type { CellState, MatrixColumn, MatrixModel, MatrixRow } from './matrix.js';
 import { buildStatusModel, formatDuration, formatWhen } from './model.js';
+import { displayName } from './naming.js';
 
 /** The console's filters (design C1) */
 export type ConsoleFilter = 'all' | 'pending' | 'attention' | 'diff';
@@ -10,7 +12,7 @@ export type ConsoleFilter = 'all' | 'pending' | 'attention' | 'diff';
 export const CONSOLE_FILTERS: readonly ConsoleFilter[] = ['all', 'pending', 'attention', 'diff'];
 
 /** What the console can run on the selected migration: each is an existing `mmk.*` command */
-export type ConsoleAction = 'up' | 'dryRun' | 'down' | 'redo' | 'showAppliedVersion';
+export type ConsoleAction = 'up' | 'dryRun' | 'down' | 'redo' | 'downBatch' | 'showAppliedVersion';
 
 /** Every action, for checking messages */
 const CONSOLE_ACTIONS: readonly ConsoleAction[] = [
@@ -18,6 +20,7 @@ const CONSOLE_ACTIONS: readonly ConsoleAction[] = [
   'dryRun',
   'down',
   'redo',
+  'downBatch',
   'showAppliedVersion',
 ];
 
@@ -30,12 +33,17 @@ export type ConsoleMessage =
   | { type: 'environment'; name: string }
   | { type: 'pick'; file: string }
   | { type: 'action'; action: ConsoleAction }
-  | { type: 'copy' }
+  | { type: 'copy'; what?: 'plan' }
   | { type: 'open'; file: string }
   | { type: 'create' }
   | { type: 'plan' }
-  | { type: 'applyAll' }
-  | { type: 'addEnvironment' };
+  | { type: 'addEnvironment' }
+  | { type: 'applyPlan' }
+  | { type: 'closeDrawer' }
+  | { type: 'rollBack'; batch: number }
+  | { type: 'unlock' }
+  | { type: 'editEnvironment' }
+  | { type: 'showOutput' };
 
 /**
  * True for a message the console's webview may send, checked field by field: the webview draws
@@ -47,14 +55,23 @@ export function isConsoleMessage(value: unknown): value is ConsoleMessage {
   }
   const message = value as Record<string, unknown>;
   switch (message.type) {
+    case 'copy':
+      return message.what === undefined || message.what === 'plan';
     case 'ready':
     case 'refresh':
-    case 'copy':
     case 'create':
     case 'plan':
-    case 'applyAll':
     case 'addEnvironment':
+    case 'applyPlan':
+    case 'closeDrawer':
+    case 'unlock':
+    case 'editEnvironment':
+    case 'showOutput':
       return true;
+    case 'rollBack':
+      return (
+        typeof message.batch === 'number' && Number.isInteger(message.batch) && message.batch > 0
+      );
     case 'source':
       return message.value === 'branch' || message.value === 'ref';
     case 'filter':
@@ -143,6 +160,8 @@ export interface ConsoleButton {
   action: ConsoleAction;
   label: string;
   primary: boolean;
+  /** The batch `downBatch` rolls back */
+  batch?: number;
 }
 
 /** The picked migration */
@@ -167,12 +186,18 @@ export interface ConsoleBatch {
   picked: boolean;
 }
 
+/** What a notice's buttons do */
+export type NoticeAction = 'review' | 'retry' | 'editEnvironment' | 'showOutput';
+
 /** A line above the table when something needs saying */
 export interface ConsoleNotice {
-  kind: 'edited' | 'read-only';
+  kind: 'edited' | 'read-only' | 'unreadable' | 'not-set-up';
   text: string;
+  /** mmk's own message, shown as is (`unreadable`) */
+  detail?: string;
   /** The file *Review it* picks, for `edited` */
   file?: string;
+  actions: NoticeAction[];
 }
 
 /** Everything the console shows */
@@ -275,7 +300,7 @@ export function buildConsole(input: ConsoleInput): ConsoleModel {
     batches: batchesOn(input.rows[name] ?? null, picked?.file ?? null, now),
     pending,
     readOnly,
-    notice: noticeFor(input.matrix.rows, name, readOnly, kindOn),
+    notice: noticeFor(input.matrix, name, readOnly, kindOn),
   };
 }
 
@@ -312,9 +337,9 @@ function detailFor(
   records: Map<string, WireStatusRow>,
   now: Date,
 ): ConsoleDetail {
-  const kind = row.cells[environment]?.kind ?? 'unknown';
+  const cell: CellState = row.cells[environment] ?? { kind: 'unknown' };
   const record = records.get(row.file);
-  const actions = actionsFor(row, kind, environment, readOnly, input.filesAreLocal);
+  const actions = actionsFor(row, cell, environment, readOnly, input.filesAreLocal);
   return {
     file: row.file,
     label: row.label,
@@ -339,11 +364,12 @@ function detailFor(
 /** The buttons, the note under them and the CLI command, for one migration on one environment */
 function actionsFor(
   row: MatrixRow,
-  kind: CellState['kind'],
+  cell: CellState,
   environment: string,
   readOnly: boolean,
   filesAreLocal: boolean,
 ): Pick<ConsoleDetail, 'buttons' | 'note' | 'cli'> {
+  const { kind } = cell;
   const status = { buttons: [], cli: ['status'] };
   if (!filesAreLocal) {
     return {
@@ -383,6 +409,16 @@ function actionsFor(
         buttons: [
           { action: 'down', label: 'Run down…', primary: false },
           { action: 'redo', label: 'Redo…', primary: false },
+          ...('batch' in cell && cell.batch !== null
+            ? [
+                {
+                  action: 'downBatch' as const,
+                  label: `Roll back batch ${cell.batch}…`,
+                  primary: false,
+                  batch: cell.batch,
+                },
+              ]
+            : []),
         ],
         note: 'Each one asks before it runs.',
         cli: ['down', row.file],
@@ -499,18 +535,35 @@ function batchesOn(
 }
 
 function noticeFor(
-  rows: readonly MatrixRow[],
+  matrix: MatrixModel,
   environment: string,
   readOnly: boolean,
   kindOn: (row: MatrixRow, environment: string) => CellState['kind'],
 ): ConsoleNotice | null {
+  const column = matrix.columns.find((candidate) => candidate.name === environment);
+  if (column?.state === 'error') {
+    return {
+      kind: 'unreadable',
+      text: `Couldn't read ${environment}. mmk said:`,
+      detail: column.message ?? '',
+      actions: column.local ? ['retry', 'showOutput'] : ['retry', 'editEnvironment', 'showOutput'],
+    };
+  }
+  if (column?.state === 'not-set-up') {
+    return {
+      kind: 'not-set-up',
+      text: `${environment} isn't set up for this project: it has no connection string in your keychain yet.`,
+      actions: ['editEnvironment'],
+    };
+  }
   if (readOnly) {
     return {
       kind: 'read-only',
       text: `${environment} is read-only. The extension only runs status, list and dry-run there; deploys go through CI.`,
+      actions: [],
     };
   }
-  const edited = rows.filter((row) => kindOn(row, environment) === 'edited');
+  const edited = matrix.rows.filter((row) => kindOn(row, environment) === 'edited');
   const first = edited[0];
   if (!first) {
     return null;
@@ -520,6 +573,7 @@ function noticeFor(
   return {
     kind: 'edited',
     file: first.file,
+    actions: ['review'],
     text:
       edited.length === 1
         ? `${first.label} was edited after it ran on ${environment}${batch}. mmk won't roll it back until it matches again.`
@@ -530,4 +584,231 @@ function noticeFor(
 function when(iso: string, now: Date): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '' : formatWhen(date, now);
+}
+
+/** One migration a plan would run */
+export interface PlanStep {
+  file: string;
+  label: string;
+  description: string;
+  author: string;
+}
+
+/** The migrations `dry-run up` says up would apply, in the order mmk would run them */
+export function planSteps(rows: readonly WireStatusRow[]): PlanStep[] {
+  return rows
+    .filter((row) => row.status === 'pending')
+    .map((row) => ({
+      file: row.file,
+      label: displayName(row.file).label,
+      description: row.description ?? '',
+      author: row.author ?? '',
+    }));
+}
+
+/** How a run the console started ended: mmk's results, or its failure as is */
+export interface RunOutcome {
+  /** What mmk reported; on a failure, what ran before it (R10), else nothing */
+  results: readonly Wire<RunResult>[];
+  /** mmk's failure: its code, its message as is, and the file it names */
+  failure: { code: string | null; message: string; file: string | null } | null;
+}
+
+/** What the result panel is built from */
+export interface ResultInput {
+  kind: 'up' | 'downBatch';
+  environment: string;
+  /** The files the run was about: the plan's, or the batch's (newest first) */
+  files: readonly string[];
+  /** The batch rolled back, for `downBatch` */
+  batch: number | null;
+  outcome: RunOutcome;
+  /** The environment's status rows, read after the run */
+  after: readonly WireStatusRow[] | null;
+}
+
+/** One file of a run */
+export interface ResultLine {
+  file: string;
+  label: string;
+  state: 'done' | 'failed' | 'not-run';
+  text: string;
+  duration: string;
+}
+
+/** What the result panel offers next */
+export type ResultAction = 'open' | 'rollBack' | 'unlock' | 'showOutput' | 'close';
+
+/** The result panel (design C8) */
+export interface ConsoleResult {
+  kind: 'up' | 'downBatch';
+  environment: string;
+  ok: boolean;
+  title: string;
+  subtitle: string;
+  lines: ResultLine[];
+  /** mmk's failure as is */
+  failure: { code: string | null; message: string } | null;
+  /** Where the environment stands now, from its status read after the run */
+  standing: string;
+  actions: ResultAction[];
+  /** The file *Open the file* opens: the one mmk says failed */
+  openFile: string | null;
+  /** The batch *Roll back batch N…* rolls back */
+  rollBackBatch: number | null;
+}
+
+/**
+ * Lay out a run's result: each file's outcome from mmk's results, and when mmk stopped early
+ * without listing what ran before (mmk 1.5, before R10), from the status read after the run.
+ */
+export function buildResult(input: ResultInput): ConsoleResult {
+  const { kind, environment, outcome } = input;
+  const byFile = new Map(outcome.results.map((result) => [result.file, result]));
+  const after = new Map((input.after ?? []).map((row) => [row.file, row]));
+  const failedFile = outcome.failure?.file ?? null;
+
+  const lines = input.files.map((file): ResultLine => {
+    const label = displayName(file).label;
+    const result = byFile.get(file);
+    const row = after.get(file);
+    if (result && (result.status === 'applied' || result.status === 'reverted')) {
+      return {
+        file,
+        label,
+        state: 'done',
+        text:
+          result.status === 'applied'
+            ? `Applied${result.batch === undefined ? '' : ` in batch ${result.batch}`}`
+            : 'Rolled back',
+        duration: result.duration === undefined ? '' : formatDuration(result.duration),
+      };
+    }
+    if (result?.status === 'skipped') {
+      return {
+        file,
+        label,
+        state: 'not-run',
+        text: result.reason ? `Skipped: ${result.reason}` : 'Skipped',
+        duration: '',
+      };
+    }
+    if (file === failedFile) {
+      return {
+        file,
+        label,
+        state: 'failed',
+        text: `Failed in ${kind === 'up' ? 'up()' : 'down()'}`,
+        duration: '',
+      };
+    }
+    if (row && kind === 'up' && row.status === 'applied') {
+      return {
+        file,
+        label,
+        state: 'done',
+        text: `Applied in batch ${row.batch ?? '?'}`,
+        duration: '',
+      };
+    }
+    if (row && kind === 'downBatch' && row.status === 'pending') {
+      return { file, label, state: 'done', text: 'Rolled back', duration: '' };
+    }
+    return {
+      file,
+      label,
+      state: 'not-run',
+      text: kind === 'up' ? 'Still pending' : 'Still applied',
+      duration: '',
+    };
+  });
+
+  const done = lines.filter((line) => line.state === 'done');
+  const notRun = lines.filter((line) => line.state !== 'done');
+  const total = outcome.results.reduce((sum, result) => sum + (result.duration ?? 0), 0);
+  const appliedBatch =
+    outcome.results.find((result) => result.status === 'applied')?.batch ??
+    done.map((line) => after.get(line.file)?.batch).find((batch) => typeof batch === 'number') ??
+    null;
+
+  let title: string;
+  if (outcome.failure) {
+    title =
+      done.length > 0
+        ? `Stopped after ${done.length} of ${lines.length} on ${environment}`
+        : `Nothing ran on ${environment}`;
+  } else if (kind === 'downBatch') {
+    title = `Rolled back batch ${input.batch ?? '?'} on ${environment}`;
+  } else {
+    title =
+      done.length > 0
+        ? `Applied ${done.length} on ${environment}`
+        : `Nothing to apply on ${environment}`;
+  }
+
+  const names = (list: readonly ResultLine[]): string => joinNames(list.map((line) => line.label));
+  let standing: string;
+  if (kind === 'up') {
+    standing = [
+      done.length > 0
+        ? `${names(done)} ${done.length === 1 ? 'is' : 'are'} applied${appliedBatch === null ? '' : ` in batch ${appliedBatch}`}`
+        : '',
+      notRun.length > 0
+        ? `${names(notRun)} ${notRun.length === 1 ? 'is' : 'are'} still pending`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+  } else {
+    standing = [
+      done.length > 0 ? `${names(done)} ${done.length === 1 ? 'is' : 'are'} pending again` : '',
+      notRun.length > 0
+        ? `${names(notRun)} ${notRun.length === 1 ? 'is' : 'are'} still applied`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+  }
+
+  const actions: ResultAction[] = [];
+  if (outcome.failure?.code === 'LOCK_ALREADY_HELD') {
+    actions.push('unlock');
+  } else if (failedFile) {
+    actions.push('open');
+  }
+  if (kind === 'up' && done.length > 0 && appliedBatch !== null) {
+    actions.push('rollBack');
+  }
+  actions.push(outcome.failure ? 'showOutput' : 'close');
+
+  return {
+    kind,
+    environment,
+    ok: outcome.failure === null,
+    title,
+    subtitle:
+      outcome.results.length > 0
+        ? [
+            appliedBatch === null || kind !== 'up' ? '' : `Batch ${appliedBatch}`,
+            formatDuration(total),
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '',
+    lines,
+    failure: outcome.failure
+      ? { code: outcome.failure.code, message: outcome.failure.message }
+      : null,
+    standing: standing ? `${standing}.` : '',
+    actions,
+    openFile: failedFile,
+    rollBackBatch: kind === 'up' && done.length > 0 ? appliedBatch : null,
+  };
+}
+
+/** `a`, `a and b`, `a, b and c` */
+function joinNames(names: readonly string[]): string {
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }

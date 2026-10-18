@@ -212,6 +212,34 @@ describe('MmkStore', () => {
     expect(mmk.calls.map((args) => args[0])).toEqual(['config', 'status', 'up', 'status']);
   });
 
+  it("should pass mmk's log lines of a run to output listeners, credentials hidden", async () => {
+    const mmk = fakeMmk({ config: () => CONFIG, status: () => [PENDING_ROW] });
+    const store = new MmkStore({
+      log: quiet,
+      run: async (invocation, args, options) => {
+        if (args[0] === 'up') {
+          options.onStderrLine?.('Running 0001-a.js');
+          options.onStderrLine?.('connected to mongodb://alice:s3cret@db.example.com/orders');
+          return { value: [], exitCode: 0, stderr: '', otherStdout: '' };
+        }
+        return mmk.run(invocation, args, options);
+      },
+    });
+    store.setProjects([ready()]);
+    await store.idle();
+    const lines: Array<[string, string]> = [];
+    const listening = store.onDidOutput((dir, line) => lines.push([dir, line]));
+
+    await store.run(DIR, ['up'], 'up');
+    listening.dispose();
+    await store.run(DIR, ['up'], 'up');
+
+    expect(lines).toEqual([
+      [DIR, 'Running 0001-a.js'],
+      [DIR, 'connected to mongodb://***:***@db.example.com/orders'],
+    ]);
+  });
+
   it('should clear the running command when it fails, and pass the error on', async () => {
     const failure = new MmkCommandError(
       { code: 'LOCK_ALREADY_HELD', message: 'Held by pid 7' },

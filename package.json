@@ -139,6 +139,12 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "mmk.downBatch",
+        "title": "Roll back a batch…",
+        "category": "mmk",
+        "icon": "$(discard)"
+      },
+      {
         "command": "mmk.dryRun",
         "title": "Dry run",
         "category": "mmk",
@@ -360,6 +366,10 @@
         },
         {
           "command": "mmk.openConsole",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.downBatch",
           "when": "mmk.hasProject"
         },
         {

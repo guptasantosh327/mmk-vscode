@@ -373,6 +373,35 @@ describe('error document', () => {
   });
 });
 
+describe('down --batch, for rolling back a batch (Phase 7)', () => {
+  const project = withProject('contract_down_batch');
+
+  it('down --batch <n>: reverts every file of that batch, newest first, and only those', async () => {
+    await project().run(['up', CREATE_USERS]);
+    await project().run(['up']);
+
+    const output = await project().run(['down', '--batch', '2']);
+
+    expect(parseRunResults(output.value, 'down')).toEqual([
+      { file: BACKFILL, status: 'reverted', duration: expect.any(Number) },
+      { file: ADD_EMAIL_INDEX, status: 'reverted', duration: expect.any(Number) },
+    ]);
+    const rows = parseStatusRows((await project().run(['status'])).value, 'status');
+    expect(rows.map((row) => [row.file, row.status, row.batch])).toEqual([
+      [CREATE_USERS, 'applied', 1],
+      [ADD_EMAIL_INDEX, 'pending', null],
+      [BACKFILL, 'pending', null],
+    ]);
+  });
+
+  it("down --batch <n>: mmk's own error for a batch that isn't there", async () => {
+    const error = await expectFailure(project().run(['down', '--batch', '9']));
+
+    expect(error.failure.code).toBe('INVALID_ARGUMENT');
+    expect(error.failure.message).toMatch(/No applied migrations found in batch 9/);
+  });
+});
+
 describe('stdout from user code', () => {
   const project = withProject('contract_stdout');
 

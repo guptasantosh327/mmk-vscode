@@ -192,7 +192,8 @@ button.link:hover {
 /* A line above the table */
 .notice {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   align-items: center;
   margin-bottom: 12px;
   padding: 7px 12px;
@@ -201,17 +202,46 @@ button.link:hover {
   background: var(--vscode-inputValidation-infoBackground);
 }
 
+.notice-line {
+  display: flex;
+  flex: 1 1 320px;
+  gap: 8px;
+  align-items: center;
+}
+
+.notice .mmk-message {
+  flex: 1 1 100%;
+}
+
 .notice.edited {
   border-color: var(--vscode-inputValidation-warningBorder);
   background: var(--vscode-inputValidation-warningBackground);
 }
 
-.notice span:nth-child(2) {
-  flex: 1;
+.notice.edited .notice-line .codicon {
+  color: var(--vscode-editorWarning-foreground);
 }
 
-.notice.edited .codicon {
-  color: var(--vscode-editorWarning-foreground);
+.notice.unreadable {
+  border-color: var(--vscode-inputValidation-errorBorder);
+  background: var(--vscode-inputValidation-errorBackground);
+}
+
+.notice.unreadable .notice-line .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+/* mmk's own words, as it wrote them */
+.mmk-message {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .error {
@@ -480,4 +510,201 @@ tr.picked .cell .codicon {
 
 .batch.next .title {
   color: var(--vscode-charts-blue);
+}
+
+/* The panel over the console: plan, running, result */
+body.drawer-open {
+  overflow: hidden;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--vscode-widget-shadow);
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  border-left: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  background: var(--vscode-editorWidget-background);
+  box-shadow: -8px 0 24px var(--vscode-widget-shadow);
+}
+
+.drawer-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.drawer-head .titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.drawer-icon {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--vscode-textCodeBlock-background);
+}
+
+.drawer-icon.info .codicon {
+  color: var(--vscode-charts-blue);
+}
+
+.drawer-icon.ok .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.drawer-icon.failed .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+.drawer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.drawer-body h3 {
+  margin: 4px 0 6px;
+}
+
+.drawer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.facts dt {
+  color: var(--vscode-descriptionForeground);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.steps,
+.result-lines {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  list-style: none;
+}
+
+.steps li,
+.result-lines li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.steps li:last-child,
+.result-lines li:last-child {
+  border-bottom: 0;
+}
+
+.step-number {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--vscode-charts-blue);
+  border-radius: 50%;
+  color: var(--vscode-charts-blue);
+  font-size: 0.85em;
+}
+
+.step-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  padding: 1px 6px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+.result-lines li.done > .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.result-lines li.failed > .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+.result-lines li.not-run > .codicon {
+  color: var(--vscode-charts-blue);
+}
+
+.standing {
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-sideBar-background);
+}
+
+.standing h3 {
+  margin-top: 0;
+}
+
+.output {
+  flex: 1;
+  min-height: 160px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-terminal-background, var(--vscode-textCodeBlock-background));
+  color: var(--vscode-terminal-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  overflow: auto;
 }

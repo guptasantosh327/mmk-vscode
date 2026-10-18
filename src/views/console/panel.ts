@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { type Deps, relativeDir, resolveProject } from '../../commands/context.js';
+import { type Deps, databaseLabel, relativeDir, resolveProject } from '../../commands/context.js';
+import { applyPending, rollBackBatch } from '../../commands/run.js';
 import { currentBranch, defaultRemoteRef } from '../../git/branches.js';
 import { copyRefFolder } from '../../git/ref-files.js';
 import { terminalCommand } from '../../mmk/cli.js';
@@ -10,8 +11,12 @@ import {
   type ConsoleFilter,
   type ConsoleMessage,
   type ConsoleModel,
+  type ConsoleResult,
+  type PlanStep,
   buildConsole,
+  buildResult,
   isConsoleMessage,
+  planSteps,
 } from '../../mmk/console.js';
 import { parseStatusRows } from '../../mmk/contract.js';
 import type { WireStatusRow } from '../../mmk/contract.js';
@@ -21,6 +26,31 @@ import type { ProjectSnapshot } from '../../mmk/store.js';
 
 /** Where the compared files come from */
 type Source = { kind: 'branch' } | { kind: 'ref'; ref: string };
+
+/** The panel over the console: a plan (C6), a run the console started (C7) or its result (C8) */
+type Drawer =
+  | { kind: 'plan'; environment: string; loading: boolean; steps: PlanStep[]; error: string | null }
+  | { kind: 'applying'; environment: string; files: string[] }
+  | { kind: 'result'; result: ConsoleResult };
+
+/** The drawer as the webview draws it */
+export type DrawerView =
+  | {
+      kind: 'plan';
+      environment: string;
+      readOnly: boolean;
+      database: string;
+      files: string;
+      loading: boolean;
+      steps: PlanStep[];
+      error: string | null;
+      cli: string;
+    }
+  | { kind: 'applying'; environment: string; files: string[] }
+  | { kind: 'result'; result: ConsoleResult };
+
+/** At most this many lines of a run's output are kept for the console */
+const OUTPUT_LINES = 400;
 
 /** Everything the webview draws, sent over postMessage */
 export interface ConsoleView {
@@ -36,6 +66,9 @@ export interface ConsoleView {
   model: ConsoleModel;
   /** The picked migration's CLI command, as Copy CLI command would copy it */
   cli: string;
+  drawer: DrawerView | null;
+  /** A command running in this project now, from anywhere, with mmk's output so far (C7) */
+  running: { label: string; environment: string; lines: string[] } | null;
 }
 
 /**
@@ -74,6 +107,7 @@ export function registerConsole(deps: Deps, extensionUri: vscode.Uri): vscode.Di
         panel.storeChanged();
       }
     }),
+    deps.store.onDidOutput((dir, line) => panels.get(dir)?.output(line)),
     { dispose: () => [...panels.values()].map((panel) => panel.dispose()) },
   ];
 }
@@ -102,6 +136,10 @@ export class ConsolePanel implements vscode.Disposable {
   private readonly databases = new Map<string, string | null>();
   private redrawTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
+  private drawer: Drawer | null = null;
+  /** mmk's output of the command running in this project, and which command that is */
+  private lines: string[] = [];
+  private linesOf: string | null = null;
 
   constructor(
     private readonly deps: Deps,
@@ -148,6 +186,20 @@ export class ConsolePanel implements vscode.Disposable {
   setFilter(filter: ConsoleFilter): void {
     this.filter = filter;
     this.post();
+  }
+
+  /** A line of mmk's output from the command running in this project */
+  output(line: string): void {
+    const running = this.deps.store.snapshot(this.dir)?.running ?? null;
+    if (running !== this.linesOf) {
+      this.lines = [];
+      this.linesOf = running;
+    }
+    this.lines.push(line);
+    if (this.lines.length > OUTPUT_LINES) {
+      this.lines.splice(0, this.lines.length - OUTPUT_LINES);
+    }
+    this.storeChanged();
   }
 
   /** The store read something new: redraw (only the branch view follows it live) */
@@ -208,18 +260,135 @@ export class ConsolePanel implements vscode.Disposable {
       case 'action':
         return this.runAction(message.action);
       case 'copy':
-        return this.copy();
+        return this.copy(message.what);
       case 'open':
         return this.open(message.file);
       case 'create':
         return vscode.commands.executeCommand('mmk.createMigration');
       case 'plan':
-        return vscode.commands.executeCommand('mmk.dryRun', { dir: this.dir });
-      case 'applyAll':
-        return vscode.commands.executeCommand('mmk.upAll', { dir: this.dir });
+        return this.plan();
+      case 'applyPlan':
+        return this.applyPlan();
+      case 'rollBack':
+        return this.rollBack(message.batch);
+      case 'closeDrawer':
+        this.drawer = null;
+        this.post();
+        return undefined;
+      case 'unlock': {
+        const released = await vscode.commands.executeCommand('mmk.unlock', { dir: this.dir });
+        if (released !== undefined) {
+          this.drawer = null;
+          this.post();
+        }
+        return released;
+      }
+      case 'editEnvironment':
+        return vscode.commands.executeCommand(
+          'mmk.editEnvironment',
+          this.deps.store.selected().name,
+        );
+      case 'showOutput':
+        return vscode.commands.executeCommand('mmk.showOutput');
       case 'addEnvironment':
         return vscode.commands.executeCommand('mmk.addEnvironment');
     }
+  }
+
+  /** Show what `up` would apply on the selected environment: mmk's dry run, nothing written */
+  private async plan(): Promise<PlanStep[] | undefined> {
+    const environment = this.deps.store.selected().name;
+    this.drawer = { kind: 'plan', environment, loading: true, steps: [], error: null };
+    this.post();
+    let drawer: Drawer;
+    try {
+      const output = await this.deps.store.read(this.dir, ['dry-run', 'up'], environment);
+      drawer = {
+        kind: 'plan',
+        environment,
+        loading: false,
+        steps: planSteps(parseStatusRows(output.value, 'dry-run')),
+        error: null,
+      };
+    } catch (error) {
+      drawer = {
+        kind: 'plan',
+        environment,
+        loading: false,
+        steps: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    if (this.drawer?.kind === 'plan' && this.drawer.environment === environment) {
+      this.drawer = drawer;
+      this.post();
+    }
+    return drawer.kind === 'plan' ? drawer.steps : undefined;
+  }
+
+  /**
+   * Apply the plan on screen: `up` on the environment it was made for, with the same checks and
+   * questions as *Apply all*, then show the result.
+   */
+  private async applyPlan(): Promise<ConsoleResult | undefined> {
+    const plan = this.drawer;
+    const project = this.deps.store.snapshot(this.dir);
+    if (
+      plan?.kind !== 'plan' ||
+      plan.loading ||
+      plan.steps.length === 0 ||
+      !project ||
+      this.deps.store.selected().name !== plan.environment
+    ) {
+      return undefined;
+    }
+    const files = plan.steps.map((step) => step.file);
+    this.drawer = { kind: 'applying', environment: plan.environment, files };
+    this.post();
+    const run = await applyPending(this.deps, project);
+    if (!run) {
+      this.drawer = plan;
+      this.post();
+      return undefined;
+    }
+    return this.showResult({
+      kind: 'up',
+      environment: run.environment.name,
+      files,
+      batch: null,
+      outcome: run.outcome,
+    });
+  }
+
+  /** Roll back a batch on the selected environment (it asks first), then show the result */
+  private async rollBack(batch: number): Promise<ConsoleResult | undefined> {
+    const project = this.deps.store.snapshot(this.dir);
+    if (!project) {
+      return undefined;
+    }
+    const run = await rollBackBatch(this.deps, project, batch);
+    if (!run) {
+      return undefined;
+    }
+    return this.showResult({
+      kind: 'downBatch',
+      environment: run.environment.name,
+      files: run.files,
+      batch,
+      outcome: run.outcome,
+    });
+  }
+
+  /** Wait for the status read that follows every run, then show how the run came out */
+  private async showResult(
+    input: Omit<Parameters<typeof buildResult>[0], 'after'>,
+  ): Promise<ConsoleResult> {
+    await this.deps.store.idle();
+    const after = this.deps.store.snapshot(this.dir)?.environments[input.environment]?.rows ?? null;
+    const result = buildResult({ ...input, after });
+    this.drawer = { kind: 'result', result };
+    this.post();
+    return result;
   }
 
   /**
@@ -235,11 +404,16 @@ export class ConsolePanel implements vscode.Disposable {
       const file = this.fileUri(detail.file);
       return file ? vscode.commands.executeCommand('mmk.showAppliedVersion', file) : undefined;
     }
+    if (action === 'downBatch') {
+      const batch = detail.buttons.find((button) => button.action === 'downBatch')?.batch;
+      return batch === undefined ? undefined : this.rollBack(batch);
+    }
     return vscode.commands.executeCommand(`mmk.${action}`, { dir: this.dir, file: detail.file });
   }
 
-  private async copy(): Promise<string | undefined> {
-    const { cli } = this.buildView();
+  private async copy(what?: 'plan'): Promise<string | undefined> {
+    const view = this.buildView();
+    const cli = what === 'plan' ? (view.drawer?.kind === 'plan' ? view.drawer.cli : '') : view.cli;
     if (!cli) {
       return undefined;
     }
@@ -393,6 +567,31 @@ export class ConsolePanel implements vscode.Disposable {
       })),
       model,
       cli: model.detail ? this.cli(selected, model.detail.cli) : '',
+      drawer: this.drawerView(project, files),
+      running:
+        project?.running && project.runningOn
+          ? {
+              label: project.running,
+              environment: project.runningOn,
+              lines: project.running === this.linesOf ? [...this.lines] : [],
+            }
+          : null,
+    };
+  }
+
+  private drawerView(project: ProjectSnapshot | undefined, files: string): DrawerView | null {
+    const drawer = this.drawer;
+    if (drawer?.kind !== 'plan') {
+      return drawer;
+    }
+    const environment = this.deps.store.environment(drawer.environment);
+    const readOnly = environment?.readOnly ?? true;
+    return {
+      ...drawer,
+      readOnly,
+      database: databaseLabel(project, drawer.environment),
+      files,
+      cli: environment ? this.cli(environment, readOnly ? ['dry-run', 'up'] : ['up']) : '',
     };
   }
 

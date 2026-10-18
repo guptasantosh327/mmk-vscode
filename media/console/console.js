@@ -52,24 +52,26 @@
     vscode.postMessage(message);
   }
 
+  /** The selected environment could be read: its counts and batches mean something */
+  function readable() {
+    const tab = view.model.tabs.find((candidate) => candidate.selected);
+    return Boolean(tab && tab.state === 'ok');
+  }
+
   function header() {
     const model = view.model;
+    const known = readable();
+    const label = !known
+      ? `Plan on ${view.selected}`
+      : model.pending > 0
+        ? `Plan ${model.pending} pending on ${view.selected}`
+        : `Nothing pending on ${view.selected}`;
     const actions = [
       button('New migration', 'add', () => send({ type: 'create' })),
-      button(
-        model.pending > 0
-          ? `Plan ${model.pending} pending on ${view.selected}`
-          : `Nothing pending on ${view.selected}`,
-        'eye',
-        () => send({ type: 'plan' }),
-        {
-          class: model.pending > 0 ? 'primary' : null,
-          disabled: model.pending > 0 ? null : 'disabled',
-        },
-      ),
-      !model.readOnly && model.pending > 0
-        ? button(`Apply all ${model.pending}`, 'run-all', () => send({ type: 'applyAll' }))
-        : null,
+      button(label, 'eye', () => send({ type: 'plan' }), {
+        class: known && model.pending > 0 ? 'primary' : null,
+        disabled: known && model.pending > 0 ? null : 'disabled',
+      }),
     ];
     return el('header', { class: 'top' }, [
       el('div', { class: 'titles' }, [
@@ -163,20 +165,269 @@
     );
   }
 
+  const NOTICE_ICONS = {
+    edited: 'warning',
+    'read-only': 'lock',
+    unreadable: 'error',
+    'not-set-up': 'key',
+  };
+
   function notice() {
     const item = view.model.notice;
     if (!item) return null;
+    const actions = {
+      review: () => button('Review it', null, () => send({ type: 'pick', file: item.file })),
+      retry: () => button('Try again', 'refresh', () => send({ type: 'refresh' })),
+      editEnvironment: () =>
+        button(`Edit ${view.selected}'s connection…`, 'key', () =>
+          send({ type: 'editEnvironment' }),
+        ),
+      showOutput: () => button('Show output', 'output', () => send({ type: 'showOutput' })),
+    };
     return el('div', { class: `notice ${item.kind}`, role: 'status' }, [
-      icon(item.kind === 'edited' ? 'warning' : 'lock'),
-      el('span', { text: item.text }),
-      item.file
-        ? el('button', {
-            type: 'button',
-            class: 'link',
-            text: 'Review it',
-            onclick: () => send({ type: 'pick', file: item.file }),
-          })
+      el('div', { class: 'notice-line' }, [
+        icon(NOTICE_ICONS[item.kind] || 'info'),
+        el('span', { text: item.text }),
+      ]),
+      item.detail ? el('pre', { class: 'mmk-message', text: item.detail }) : null,
+      item.actions.length > 0
+        ? el(
+            'div',
+            { class: 'buttons' },
+            item.actions.map((action) => (actions[action] ? actions[action]() : null)),
+          )
         : null,
+    ]);
+  }
+
+  // The panel over the console: a run in progress (C7), a plan (C6) or a result (C8)
+  function drawer() {
+    const running = view.running;
+    const item = view.drawer;
+    if (!running && !item) return null;
+    let body;
+    if (running || item.kind === 'applying') {
+      body = runningDrawer(running, item);
+    } else if (item.kind === 'plan') {
+      body = planDrawer(item);
+    } else {
+      body = resultDrawer(item.result);
+    }
+    return el('div', { class: 'overlay' }, [
+      el('div', {
+        class: 'backdrop',
+        onclick: () => (running ? null : send({ type: 'closeDrawer' })),
+      }),
+      body,
+    ]);
+  }
+
+  function drawerHead(iconName, tone, title, subtitle, closable) {
+    return el('div', { class: 'drawer-head' }, [
+      el('span', { class: `drawer-icon ${tone}` }, [icon(iconName)]),
+      el('div', { class: 'titles' }, [
+        el('h2', { text: title }),
+        el('p', { class: 'muted small', text: subtitle }),
+      ]),
+      closable
+        ? el(
+            'button',
+            {
+              type: 'button',
+              class: 'icon-button',
+              'aria-label': 'Close',
+              title: 'Close',
+              onclick: () => send({ type: 'closeDrawer' }),
+            },
+            [icon('close')],
+          )
+        : null,
+    ]);
+  }
+
+  function runningDrawer(running, item) {
+    const label = running ? running.label : 'up';
+    const environment = running ? running.environment : item.environment;
+    const lines = running ? running.lines : [];
+    return el('aside', { class: 'drawer', role: 'dialog', 'aria-label': `Running ${label}` }, [
+      drawerHead(
+        'sync codicon-modifier-spin',
+        'info',
+        `Running ${label} on ${environment}`,
+        'mmk holds the lock until it ends',
+        false,
+      ),
+      el('div', { class: 'drawer-body' }, [
+        el('h3', { text: "mmk's output, as it comes" }),
+        el('pre', { class: 'output', text: lines.length > 0 ? lines.join('\n') : 'Starting…' }),
+        el('p', {
+          class: 'muted small',
+          text: "There's no Stop: halting a migration midway could leave data half-changed. You can close this tab; the run carries on.",
+        }),
+      ]),
+    ]);
+  }
+
+  function planDrawer(plan) {
+    const steps = plan.steps;
+    const footer = [];
+    if (!plan.readOnly && steps.length > 0 && !plan.loading) {
+      footer.push(
+        button(
+          `Apply ${steps.length} on ${plan.environment}`,
+          'play',
+          () => send({ type: 'applyPlan' }),
+          {
+            class: 'primary',
+          },
+        ),
+      );
+    }
+    footer.push(
+      button(plan.readOnly || steps.length === 0 ? 'Close' : 'Cancel', null, () =>
+        send({ type: 'closeDrawer' }),
+      ),
+    );
+    return el(
+      'aside',
+      { class: 'drawer', role: 'dialog', 'aria-label': `Plan for ${plan.environment}` },
+      [
+        drawerHead(
+          'eye',
+          'info',
+          `Plan: run up on ${plan.environment}`,
+          `Nothing has run. This is mmk dry-run up for ${plan.environment}.`,
+          true,
+        ),
+        el('div', { class: 'drawer-body' }, [
+          el('dl', { class: 'facts' }, [
+            el('dt', { text: 'Target' }),
+            el('dd', {
+              text: `${plan.environment} · ${plan.readOnly ? 'read-only' : 'writable'} · ${plan.database}`,
+            }),
+            el('dt', { text: 'Files' }),
+            el('dd', { text: plan.files }),
+          ]),
+          plan.loading ? el('p', { class: 'muted', text: 'Asking mmk…' }) : null,
+          plan.error ? el('pre', { class: 'mmk-message', text: plan.error }) : null,
+          !plan.loading && !plan.error
+            ? steps.length > 0
+              ? el('div', {}, [
+                  el('h3', { text: 'Runs in this order, as one new batch' }),
+                  el(
+                    'ol',
+                    { class: 'steps' },
+                    steps.map((step, index) =>
+                      el('li', {}, [
+                        el('span', { class: 'step-number', text: String(index + 1) }),
+                        el('span', { class: 'step-text' }, [
+                          el('span', { text: step.label }),
+                          el('span', {
+                            class: 'muted small',
+                            text: [step.description, step.author].filter(Boolean).join(' · '),
+                          }),
+                        ]),
+                        el('code', { class: 'tag', text: 'up()' }),
+                      ]),
+                    ),
+                  ),
+                  el('p', {
+                    class: 'muted small',
+                    text: 'If one fails, mmk stops there: the ones before it stay applied, the rest stay pending, and the result says which.',
+                  }),
+                ])
+              : el('p', { text: `Nothing to apply: ${plan.environment} is up to date.` })
+            : null,
+          plan.readOnly
+            ? el('p', {
+                class: 'muted small',
+                text: `${plan.environment} is read-only, so this ends at the command. Deploys go through CI.`,
+              })
+            : null,
+          plan.cli ? cliLine(plan.cli, 'plan') : null,
+        ]),
+        el('div', { class: 'drawer-foot' }, footer),
+      ],
+    );
+  }
+
+  const LINE_ICONS = { done: 'pass', failed: 'error', 'not-run': 'circle-large-outline' };
+
+  function resultDrawer(result) {
+    const buttons = {
+      open: () =>
+        button('Open the file', 'go-to-file', () => send({ type: 'open', file: result.openFile }), {
+          class: 'primary',
+        }),
+      rollBack: () =>
+        button(`Roll back batch ${result.rollBackBatch}…`, 'discard', () =>
+          send({ type: 'rollBack', batch: result.rollBackBatch }),
+        ),
+      unlock: () =>
+        button('Release the lock…', 'unlock', () => send({ type: 'unlock' }), { class: 'primary' }),
+      showOutput: () => button('Show output', 'output', () => send({ type: 'showOutput' })),
+      close: () => button('Close', null, () => send({ type: 'closeDrawer' }), { class: 'primary' }),
+    };
+    return el('aside', { class: 'drawer', role: 'dialog', 'aria-label': result.title }, [
+      drawerHead(
+        result.ok ? 'pass' : 'error',
+        result.ok ? 'ok' : 'failed',
+        result.title,
+        result.subtitle,
+        true,
+      ),
+      el('div', { class: 'drawer-body' }, [
+        el(
+          'ul',
+          { class: 'result-lines' },
+          result.lines.map((line) =>
+            el('li', { class: line.state }, [
+              icon(LINE_ICONS[line.state] || 'circle-large-outline'),
+              el('span', { class: 'step-text' }, [
+                el('span', { text: line.label }),
+                el('span', { class: 'muted small', text: line.text }),
+              ]),
+              el('span', { class: 'muted small', text: line.duration }),
+            ]),
+          ),
+        ),
+        result.failure
+          ? el('pre', {
+              class: 'mmk-message',
+              text: result.failure.code
+                ? `${result.failure.code}\n${result.failure.message}`
+                : result.failure.message,
+            })
+          : null,
+        result.standing
+          ? el('div', { class: 'standing' }, [
+              el('h3', { text: `Where ${result.environment} stands now` }),
+              el('p', { text: result.standing }),
+            ])
+          : null,
+      ]),
+      el(
+        'div',
+        { class: 'drawer-foot' },
+        result.actions.map((action) => (buttons[action] ? buttons[action]() : null)),
+      ),
+    ]);
+  }
+
+  function cliLine(text, what) {
+    return el('div', { class: 'cli' }, [
+      el('code', { text }),
+      el(
+        'button',
+        {
+          type: 'button',
+          class: 'icon-button',
+          title: 'Copy CLI command',
+          'aria-label': 'Copy CLI command',
+          onclick: () => send(what ? { type: 'copy', what } : { type: 'copy' }),
+        },
+        [icon('copy')],
+      ),
     ]);
   }
 
@@ -316,27 +567,13 @@
           )
         : null,
       el('p', { class: 'muted small', text: item.note }),
-      view.cli
-        ? el('div', { class: 'cli' }, [
-            el('code', { text: view.cli }),
-            el(
-              'button',
-              {
-                type: 'button',
-                class: 'icon-button',
-                title: 'Copy CLI command',
-                'aria-label': 'Copy CLI command',
-                onclick: () => send({ type: 'copy' }),
-              },
-              [icon('copy')],
-            ),
-          ])
-        : null,
+      view.cli ? cliLine(view.cli) : null,
     ]);
   }
 
   function history() {
     const model = view.model;
+    if (!readable()) return null;
     const items = model.batches.map((batch) =>
       el('li', { class: batch.picked ? 'batch picked' : 'batch' }, [
         el('span', { class: 'dot', 'aria-hidden': 'true' }),
@@ -382,12 +619,28 @@
         ]),
       );
     }
-    app.append(el('div', { class: 'main' }, [table(), detail()]), history());
+    app.append(el('div', { class: 'main' }, [table(), detail()]));
+    const batches = history();
+    if (batches) app.append(batches);
+    const panel = drawer();
+    if (panel) {
+      app.append(panel);
+      document.body.classList.add('drawer-open');
+    } else {
+      document.body.classList.remove('drawer-open');
+    }
     if (focused) {
       const picked = app.querySelector('tr.picked .pick');
       if (picked) picked.focus();
     }
   }
+
+  // Escape closes a plan or a result (never a run in progress)
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && view && view.drawer && !view.running) {
+      send({ type: 'closeDrawer' });
+    }
+  });
 
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'model') {

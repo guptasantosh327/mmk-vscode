@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { type ConsoleInput, buildConsole, isConsoleMessage } from '../../src/mmk/console.js';
+import {
+  type ConsoleInput,
+  type ResultInput,
+  buildConsole,
+  buildResult,
+  isConsoleMessage,
+  planSteps,
+} from '../../src/mmk/console.js';
 import type { WireStatusRow } from '../../src/mmk/contract.js';
 import { type Environment, localEnvironment } from '../../src/mmk/environments.js';
 import { type MatrixInput, buildMatrix } from '../../src/mmk/matrix.js';
@@ -146,7 +153,13 @@ describe('buildConsole', () => {
   it('should offer down and redo for an applied migration, and mark its batch', () => {
     const model = buildConsole(input({ picked: REFUNDS }));
 
-    expect(model.detail?.buttons.map((button) => button.action)).toEqual(['down', 'redo']);
+    expect(
+      model.detail?.buttons.map((button) => [button.action, button.label, button.batch]),
+    ).toEqual([
+      ['down', 'Run down…', undefined],
+      ['redo', 'Redo…', undefined],
+      ['downBatch', 'Roll back batch 3…', 3],
+    ]);
     expect(model.detail?.cli).toEqual(['down', REFUNDS]);
     expect(model.detail?.records.map((record) => [record.text, record.extra])).toEqual([
       ['Applied in batch 3', '2 min ago · 38 ms'],
@@ -171,6 +184,7 @@ describe('buildConsole', () => {
     expect(model.notice).toEqual({
       kind: 'edited',
       file: BACKFILL,
+      actions: ['review'],
       text: "backfill-order-status.js was edited after it ran on local in batch 2. mmk won't roll it back until it matches again.",
     });
   });
@@ -280,7 +294,9 @@ describe('isConsoleMessage', () => {
       { type: 'action', action: 'up' },
       { type: 'action', action: 'showAppliedVersion' },
       { type: 'copy' },
-      { type: 'applyAll' },
+      { type: 'applyPlan' },
+      { type: 'rollBack', batch: 3 },
+      { type: 'unlock' },
     ]) {
       expect(isConsoleMessage(message), JSON.stringify(message)).toBe(true);
     }
@@ -298,8 +314,211 @@ describe('isConsoleMessage', () => {
       { type: 'source', value: '../main' },
       { type: 'pick', file: 42 },
       { type: 'environment' },
+      { type: 'applyAll' },
+      { type: 'rollBack', batch: 0 },
+      { type: 'rollBack', batch: 2.5 },
+      { type: 'rollBack', batch: '3' },
     ]) {
       expect(isConsoleMessage(message), JSON.stringify(message)).toBe(false);
     }
+  });
+});
+
+describe('buildConsole notices', () => {
+  function unreadable(environment: Environment, state: 'error' | 'not-set-up'): ConsoleInput {
+    const matrixInputs: MatrixInput[] = ENVIRONMENTS.map((candidate) =>
+      candidate === environment
+        ? {
+            environment: candidate,
+            rows: null,
+            state,
+            ...(state === 'error'
+              ? { message: 'Could not connect to MongoDB at mongodb://***:***@db.example.com' }
+              : {}),
+            database: null,
+          }
+        : {
+            environment: candidate,
+            rows: ROWS[candidate.name] ?? null,
+            state: 'ok',
+            database: null,
+          },
+    );
+    return input({ matrix: buildMatrix(matrixInputs), selected: environment.name });
+  }
+
+  it("should show mmk's own message for an environment it couldn't read", () => {
+    expect(buildConsole(unreadable(STAGING, 'error')).notice).toEqual({
+      kind: 'unreadable',
+      text: "Couldn't read staging. mmk said:",
+      detail: 'Could not connect to MongoDB at mongodb://***:***@db.example.com',
+      actions: ['retry', 'editEnvironment', 'showOutput'],
+    });
+    // local's connection comes from the project's config, so there's nothing to edit here
+    expect(buildConsole(unreadable(LOCAL, 'error')).notice?.actions).toEqual([
+      'retry',
+      'showOutput',
+    ]);
+  });
+
+  it('should offer to set up an environment this project has no connection for', () => {
+    expect(buildConsole(unreadable(PROD, 'not-set-up')).notice).toMatchObject({
+      kind: 'not-set-up',
+      actions: ['editEnvironment'],
+    });
+  });
+});
+
+describe('planSteps', () => {
+  it('should list what dry-run up would apply, in its order', () => {
+    expect(
+      planSteps([applied(INDEXES, 1, '2026-10-09T12:00:00.000Z'), ...(ROWS.local ?? []).slice(3)]),
+    ).toEqual([
+      {
+        file: REGION,
+        label: 'add-orders-region-field.js',
+        description: 'Default every order to the EU region',
+        author: 'Asha Rao',
+      },
+    ]);
+  });
+});
+
+describe('buildResult', () => {
+  const A = '20261014103000-add-orders-region-field.js';
+  const B = '20261015111500-index-payments-by-customer.js';
+  const C = '20261016094500-index-orders-by-customer-date.js';
+
+  function result(overrides: Partial<ResultInput>): ReturnType<typeof buildResult> {
+    return buildResult({
+      kind: 'up',
+      environment: 'local',
+      files: [A, B, C],
+      batch: null,
+      outcome: { results: [], failure: null },
+      after: null,
+      ...overrides,
+    });
+  }
+
+  it('should report a run that applied everything, with its batch and time', () => {
+    const report = result({
+      outcome: {
+        results: [
+          { file: A, status: 'applied', duration: 412, batch: 4 },
+          { file: B, status: 'applied', duration: 806, batch: 4 },
+          { file: C, status: 'applied', duration: 22, batch: 4 },
+        ],
+        failure: null,
+      },
+    });
+
+    expect(report).toMatchObject({
+      ok: true,
+      title: 'Applied 3 on local',
+      subtitle: 'Batch 4 · 1.2 s',
+      standing:
+        'add-orders-region-field.js, index-payments-by-customer.js and index-orders-by-customer-date.js are applied in batch 4.',
+      actions: ['rollBack', 'close'],
+      rollBackBatch: 4,
+      openFile: null,
+      failure: null,
+    });
+    expect(report.lines.map((line) => [line.state, line.text, line.duration])).toEqual([
+      ['done', 'Applied in batch 4', '412 ms'],
+      ['done', 'Applied in batch 4', '806 ms'],
+      ['done', 'Applied in batch 4', '22 ms'],
+    ]);
+  });
+
+  it('should say what ran before a failure from the status read after it (mmk 1.5, no R10)', () => {
+    const report = result({
+      outcome: {
+        results: [],
+        failure: { code: 'MIGRATION_EXECUTION_FAILED', message: 'E11000 duplicate key', file: C },
+      },
+      after: [
+        applied(A, 4, '2026-10-18T11:59:00.000Z'),
+        applied(B, 4, '2026-10-18T11:59:00.000Z'),
+        pending(C),
+      ],
+    });
+
+    expect(report).toMatchObject({
+      ok: false,
+      title: 'Stopped after 2 of 3 on local',
+      failure: { code: 'MIGRATION_EXECUTION_FAILED', message: 'E11000 duplicate key' },
+      standing:
+        'add-orders-region-field.js and index-payments-by-customer.js are applied in batch 4; index-orders-by-customer-date.js is still pending.',
+      actions: ['open', 'rollBack', 'showOutput'],
+      openFile: C,
+      rollBackBatch: 4,
+    });
+    expect(report.lines.map((line) => [line.state, line.text])).toEqual([
+      ['done', 'Applied in batch 4'],
+      ['done', 'Applied in batch 4'],
+      ['failed', 'Failed in up()'],
+    ]);
+  });
+
+  it('should offer to release the lock when mmk found it held, and say nothing ran', () => {
+    const report = result({
+      outcome: {
+        results: [],
+        failure: {
+          code: 'LOCK_ALREADY_HELD',
+          message: 'Migration lock is held by asha',
+          file: null,
+        },
+      },
+      after: [pending(A), pending(B), pending(C)],
+    });
+
+    expect(report).toMatchObject({
+      title: 'Nothing ran on local',
+      actions: ['unlock', 'showOutput'],
+      rollBackBatch: null,
+      openFile: null,
+    });
+    expect(report.lines.every((line) => line.text === 'Still pending')).toBe(true);
+  });
+
+  it('should report a batch rolled back, and what is pending again', () => {
+    const report = result({
+      kind: 'downBatch',
+      files: [B, A],
+      batch: 4,
+      outcome: {
+        results: [
+          { file: B, status: 'reverted', duration: 30 },
+          { file: A, status: 'reverted', duration: 12 },
+        ],
+        failure: null,
+      },
+    });
+
+    expect(report).toMatchObject({
+      ok: true,
+      title: 'Rolled back batch 4 on local',
+      standing: 'index-payments-by-customer.js and add-orders-region-field.js are pending again.',
+      actions: ['close'],
+      rollBackBatch: null,
+    });
+    expect(report.lines.map((line) => line.text)).toEqual(['Rolled back', 'Rolled back']);
+  });
+
+  it("should show mmk's reason for a file it skipped", () => {
+    const report = result({
+      files: [A],
+      outcome: {
+        results: [{ file: A, status: 'skipped', reason: 'already applied' }],
+        failure: null,
+      },
+    });
+
+    expect(report.lines).toEqual([
+      expect.objectContaining({ state: 'not-run', text: 'Skipped: already applied' }),
+    ]);
+    expect(report.title).toBe('Nothing to apply on local');
   });
 });

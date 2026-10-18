@@ -1,6 +1,7 @@
 import type { RunResult } from 'mongo-migrate-kit';
 import * as vscode from 'vscode';
 import { type JsonOutput, MmkCommandError } from '../mmk/cli.js';
+import type { RunOutcome } from '../mmk/console.js';
 import {
   type UnlockResult,
   type Wire,
@@ -12,7 +13,7 @@ import {
 } from '../mmk/contract.js';
 import type { Environment } from '../mmk/environments.js';
 import { formatStatusTable } from '../mmk/format.js';
-import { formatDuration } from '../mmk/model.js';
+import { buildStatusModel, formatDuration, formatWhen } from '../mmk/model.js';
 import { StoreError } from '../mmk/store.js';
 import type { ProjectSnapshot } from '../mmk/store.js';
 import {
@@ -32,6 +33,9 @@ export function registerRunCommands(deps: Deps): vscode.Disposable[] {
     vscode.commands.registerCommand('mmk.upAll', (target?: unknown) => runUpAll(deps, target)),
     vscode.commands.registerCommand('mmk.down', (target?: unknown) => runDown(deps, target)),
     vscode.commands.registerCommand('mmk.redo', (target?: unknown) => runRedo(deps, target)),
+    vscode.commands.registerCommand('mmk.downBatch', (target?: unknown) =>
+      runDownBatch(deps, target),
+    ),
     vscode.commands.registerCommand('mmk.dryRun', (target?: unknown) => dryRun(deps, target)),
     vscode.commands.registerCommand('mmk.unlock', (target?: unknown) => unlock(deps, target)),
   ];
@@ -215,6 +219,191 @@ async function runRedo(deps: Deps, target: unknown): Promise<Wire<RunResult>[] |
   return results;
 }
 
+/**
+ * Roll back one batch on the selected environment: the batch named by the argument
+ * (`{ dir, batch }`), or one the user picks. Reports the outcome in a notification.
+ */
+async function runDownBatch(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | undefined> {
+  const project = await resolveProject(deps, target);
+  if (!project) {
+    return undefined;
+  }
+  let batch = batchOf(target);
+  if (batch === undefined) {
+    const environment = currentEnvironment(deps);
+    const groups = buildStatusModel(project.environments[environment.name]?.rows ?? []).batches;
+    if (groups.length === 0) {
+      void vscode.window.showInformationMessage(
+        `Nothing to roll back on ${environment.name}: no batch has run there.`,
+      );
+      return undefined;
+    }
+    const picked = await vscode.window.showQuickPick(
+      groups.map((group) => ({
+        label: `Batch ${group.batch}`,
+        description: `${group.rows.length} ${group.rows.length === 1 ? 'migration' : 'migrations'}${group.appliedAt ? ` · ${formatWhen(group.appliedAt)}` : ''}`,
+        detail: group.rows.map((row) => shortName(row.file)).join(', '),
+        batch: group.batch,
+      })),
+      { title: `mmk: Roll back a batch on ${environment.name}` },
+    );
+    if (!picked) {
+      return undefined;
+    }
+    batch = picked.batch;
+  }
+  const run = await rollBackBatch(deps, project, batch);
+  if (!run) {
+    return undefined;
+  }
+  const { outcome, environment } = run;
+  if (outcome.failure) {
+    showFailure(deps, project, environment, outcome.failure);
+    return undefined;
+  }
+  const reverted = outcome.results.filter((result) => result.status === 'reverted');
+  const total = reverted.reduce((sum, result) => sum + (result.duration ?? 0), 0);
+  void vscode.window.showInformationMessage(
+    `Rolled back batch ${batch} on ${environment.name}: ${reverted.length} ${reverted.length === 1 ? 'migration' : 'migrations'} in ${formatDuration(total)}. ${reverted.length === 1 ? "It's" : "They're"} pending again.`,
+  );
+  return [...outcome.results];
+}
+
+/** The `batch` of a `{ dir, batch }` argument */
+function batchOf(target: unknown): number | undefined {
+  if (typeof target !== 'object' || target === null || !('batch' in target)) {
+    return undefined;
+  }
+  const { batch } = target;
+  return typeof batch === 'number' && Number.isInteger(batch) && batch > 0 ? batch : undefined;
+}
+
+/** The applied files of one batch on an environment, newest first, as its status rows list them */
+export function batchFiles(project: ProjectSnapshot, environment: string, batch: number): string[] {
+  return (project.environments[environment]?.rows ?? [])
+    .filter((row) => row.status === 'applied' && row.batch === batch)
+    .map((row) => row.file)
+    .sort((a, b) => b.localeCompare(a));
+}
+
+/**
+ * Roll back one batch on the selected environment (`mmk down --batch N`), after a modal that
+ * names every file in it. Refuses on a read-only environment. Returns how it ended, for the
+ * caller to show, or undefined when it didn't run.
+ */
+export async function rollBackBatch(
+  deps: Deps,
+  project: ProjectSnapshot,
+  batch: number,
+): Promise<{ outcome: RunOutcome; files: string[]; environment: Environment } | undefined> {
+  const environment = writableEnvironment(deps, 'rolling back');
+  if (!environment) {
+    return undefined;
+  }
+  const files = batchFiles(project, environment.name, batch);
+  if (files.length === 0) {
+    void vscode.window.showWarningMessage(
+      `There's no batch ${batch} on ${environment.name}. Refresh the mmk view if it just changed.`,
+    );
+    return undefined;
+  }
+  const names = files.map(shortName);
+  const confirmed = await deps.confirm(
+    `Roll back batch ${batch} on ${environment.name}?`,
+    `This runs down() for ${files.length === 1 ? 'its migration' : `each of its ${files.length} migrations, newest first`}, against ${databaseLabel(project, environment.name)}: ${allNames(names)}. Afterwards ${files.length === 1 ? 'it shows' : 'they show'} as pending.`,
+    `Roll back batch ${batch}`,
+  );
+  if (!confirmed) {
+    return undefined;
+  }
+  const outcome = await outcomeOf(
+    deps,
+    project,
+    environment,
+    ['down', '--batch', String(batch)],
+    `down --batch ${batch}`,
+  );
+  return { outcome, files, environment };
+}
+
+/**
+ * Apply every pending migration on the selected environment, as *Apply all* does (refused on a
+ * read-only environment, asked first anywhere but local). Returns how it ended, for the caller
+ * to show, or undefined when it didn't run.
+ */
+export async function applyPending(
+  deps: Deps,
+  project: ProjectSnapshot,
+): Promise<{ outcome: RunOutcome; environment: Environment } | undefined> {
+  const environment = writableEnvironment(deps, 'apply');
+  if (!environment) {
+    return undefined;
+  }
+  if (!(await confirmRemoteWrite(deps, environment, project, 'Apply every pending migration'))) {
+    return undefined;
+  }
+  const outcome = await outcomeOf(deps, project, environment, ['up'], 'up');
+  return { outcome, environment };
+}
+
+/** Run a write and keep how it ended (mmk's results, or its failure as is) without reporting it */
+async function outcomeOf(
+  deps: Deps,
+  project: ProjectSnapshot,
+  environment: Environment,
+  args: string[],
+  label: string,
+): Promise<RunOutcome> {
+  try {
+    const output = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: `mmk: ${label} on ${environment.name}…` },
+      () => deps.store.run(project.dir, args, label, environment.name),
+    );
+    return { results: parseRunResults(output.value, label), failure: null };
+  } catch (error) {
+    if (error instanceof MmkCommandError) {
+      const { code, details } = error.failure;
+      deps.log.error(code ? `${code}: ${error.message}` : error.message);
+      const results = runResultsOfFailure(error.failure) ?? [];
+      for (const result of results) {
+        deps.log.info(`  ran before it stopped: ${result.file} → ${result.status}`);
+      }
+      const name = details?.name;
+      return {
+        results,
+        failure: {
+          code: code ?? null,
+          message: error.message,
+          file: typeof name === 'string' ? name : null,
+        },
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    if (!(error instanceof StoreError)) {
+      deps.log.error(message);
+    }
+    return { results: [], failure: { code: null, message, file: null } };
+  }
+}
+
+/** A run's failure in a notification: mmk's message, and *Unlock…* when the lock is held */
+function showFailure(
+  deps: Deps,
+  project: ProjectSnapshot,
+  environment: Environment,
+  failure: NonNullable<RunOutcome['failure']>,
+): void {
+  if (failure.code === 'LOCK_ALREADY_HELD' && !environment.readOnly) {
+    void vscode.window.showErrorMessage(failure.message, 'Unlock…').then((choice) => {
+      if (choice === 'Unlock…') {
+        void vscode.commands.executeCommand('mmk.unlock', { dir: project.dir });
+      }
+    });
+    return;
+  }
+  showErrorWithOutput(deps, failure.message);
+}
+
 /** Preview what `up` would apply, for one file or the whole project. Allowed everywhere */
 async function dryRun(deps: Deps, target: unknown): Promise<WireStatusRow[] | undefined> {
   const environment = currentEnvironment(deps);
@@ -395,4 +584,11 @@ function listNames(names: string[]): string {
       : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
   }
   return `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+}
+
+/** Every name: `a`, `a and b`, `a, b and c` */
+function allNames(names: readonly string[]): string {
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
