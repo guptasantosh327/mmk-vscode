@@ -181,6 +181,11 @@ export function defaultColor(name: string, used: readonly EnvironmentHue[] = [])
 }
 
 /** The hue an environment is drawn in; the setting's first values stand for blue, yellow and red */
+/** True for a colour `mmk.environments` accepts: a hue, or `default`, `warning` or `error` */
+export function isEnvironmentColor(value: unknown): value is EnvironmentColor {
+  return typeof value === 'string' && COLORS.has(value);
+}
+
 export function environmentHue(color: EnvironmentColor): EnvironmentHue {
   switch (color) {
     case 'default':

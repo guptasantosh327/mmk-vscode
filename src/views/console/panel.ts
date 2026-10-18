@@ -25,6 +25,7 @@ import type { WireStatusRow } from '../../mmk/contract.js';
 import {
   type Connection,
   type Environment,
+  type EnvironmentHue,
   connectionStringProblem,
   environmentNameProblem,
 } from '../../mmk/environments.js';
@@ -66,24 +67,39 @@ interface FieldErrors {
   dbName?: string;
 }
 
+/** What the dialog's form starts with: never the connection string */
+interface DialogFields {
+  /** The environment being edited; empty when adding */
+  name: string;
+  /** Editing local: only its colour, since its connection is the project's config */
+  local: boolean;
+  dbName: string;
+  readOnly: boolean;
+  /** The colour its entry sets; null for its default */
+  color: EnvironmentHue | null;
+  /** A connection string is stored for this project, so an empty field keeps it */
+  stored: boolean;
+}
+
 /**
- * The *Add environment* dialog (C13). The connection string stays in the webview's field and in
- * the messages that test or save it: it's never part of the view sent back.
+ * The environment dialog (C13): adding one, or editing one. The connection string stays in the
+ * webview's field and in the messages that test or save it: it's never part of the view sent back.
  */
-interface AddDialog {
+interface EnvironmentDialog extends DialogFields {
+  mode: 'add' | 'edit';
   test: { state: 'idle' | 'testing' | 'ok' | 'failed'; text: string };
   errors: FieldErrors;
   saving: boolean;
-  /** The connection the last test passed for, so Add doesn't test it twice; kept here only */
+  /** The connection the last test passed for, so saving doesn't test it twice; kept here only */
   passed: Connection | null;
-  /** The last test failed, so Add offers to save anyway */
+  /** The last test failed, so saving anyway is offered */
   canForce: boolean;
 }
 
 /** The dialog as the webview draws it */
-export interface DialogView {
-  kind: 'addEnvironment';
-  test: AddDialog['test'];
+export interface DialogView extends DialogFields {
+  kind: 'addEnvironment' | 'editEnvironment';
+  test: EnvironmentDialog['test'];
   errors: FieldErrors;
   saving: boolean;
   canForce: boolean;
@@ -202,7 +218,7 @@ export class ConsolePanel implements vscode.Disposable {
   private drawer: Drawer | null = null;
   /** The last command run in this project, kept until the user closes it */
   private run: RunView | null = null;
-  private dialog: AddDialog | null = null;
+  private dialog: EnvironmentDialog | null = null;
   /** Every migration edited after it ran, as of the last view (`editedKeys`) */
   private edited = new Set<string>();
 
@@ -384,20 +400,20 @@ export class ConsolePanel implements vscode.Disposable {
         return released;
       }
       case 'editEnvironment':
-        return vscode.commands.executeCommand(
-          'mmk.editEnvironment',
-          this.deps.store.selected().name,
-        );
+        return this.openEditDialog(message.name ?? this.deps.store.selected().name);
+      case 'removeEnvironment':
+        return this.removeEnvironment();
       case 'showOutput':
         return vscode.commands.executeCommand('mmk.showOutput');
       case 'addEnvironment':
-        this.dialog = {
-          test: { state: 'idle', text: '' },
-          errors: {},
-          saving: false,
-          passed: null,
-          canForce: false,
-        };
+        this.dialog = openDialog('add', {
+          name: '',
+          local: false,
+          dbName: '',
+          readOnly: true,
+          color: null,
+          stored: false,
+        });
         this.post();
         return undefined;
       case 'closeDialog':
@@ -415,13 +431,65 @@ export class ConsolePanel implements vscode.Disposable {
     }
   }
 
-  /** The dialog's connection fields, checked the way the old prompts checked them */
-  private connectionErrors(connection: Connection): FieldErrors {
-    const uri = connectionStringProblem(connection.uri);
-    return {
-      ...(uri === null ? {} : { uri }),
-      ...(connection.dbName.trim() === '' ? { dbName: 'Type the database name' } : {}),
+  /** Open the dialog on an environment, filled in from settings and the keychain */
+  private async openEditDialog(name: string): Promise<undefined> {
+    const environment = this.deps.store.environment(name);
+    if (!environment) {
+      return undefined;
+    }
+    const stored = environment.local
+      ? null
+      : await this.deps.environments.connection(this.dir, environment.name);
+    this.dialog = openDialog('edit', {
+      name: environment.name,
+      local: environment.local,
+      dbName: stored?.dbName ?? '',
+      readOnly: environment.readOnly,
+      color: this.deps.environments.entryHue(environment.name),
+      stored: stored !== null,
+    });
+    this.post();
+    return undefined;
+  }
+
+  /** Remove the environment the dialog edits: `mmk.removeEnvironment` asks first */
+  private async removeEnvironment(): Promise<boolean> {
+    const dialog = this.dialog;
+    if (dialog?.mode !== 'edit' || dialog.local || dialog.saving) {
+      return false;
+    }
+    const removed = await vscode.commands.executeCommand<boolean>(
+      'mmk.removeEnvironment',
+      dialog.name,
+    );
+    if (removed && this.dialog === dialog) {
+      this.dialog = null;
+      this.post();
+    }
+    return removed === true;
+  }
+
+  /**
+   * The connection the dialog's fields name, checked the way the old prompts checked them. When
+   * editing, an empty connection string keeps the stored one.
+   */
+  private async dialogConnection(
+    dialog: EnvironmentDialog,
+    fields: Connection,
+  ): Promise<{ connection: Connection; errors: FieldErrors }> {
+    let uri = fields.uri.trim();
+    if (uri === '' && dialog.mode === 'edit' && dialog.stored) {
+      uri = (await this.deps.environments.connection(this.dir, dialog.name))?.uri ?? '';
+    }
+    const uriProblem =
+      uri === '' && dialog.mode === 'edit'
+        ? 'Paste the connection string: none is stored for this project yet'
+        : connectionStringProblem(uri);
+    const errors: FieldErrors = {
+      ...(uriProblem === null ? {} : { uri: uriProblem }),
+      ...(fields.dbName.trim() === '' ? { dbName: 'Type the database name' } : {}),
     };
+    return { connection: { uri, dbName: fields.dbName.trim() }, errors };
   }
 
   /** Test the dialog's connection with `mmk status`, and say what mmk read or its error */
@@ -431,18 +499,17 @@ export class ConsolePanel implements vscode.Disposable {
   ): Promise<ConnectionCheckView | undefined> {
     const dialog = this.dialog;
     const project = this.deps.store.snapshot(this.dir);
-    if (!dialog || dialog.saving || !project) {
+    if (!dialog || dialog.saving || dialog.local || !project) {
       return undefined;
     }
-    const errors = this.connectionErrors(fields);
+    const { connection, errors } = await this.dialogConnection(dialog, fields);
     dialog.errors = errors;
     if (Object.keys(errors).length > 0) {
       dialog.test = { state: 'idle', text: '' };
       this.post();
       return undefined;
     }
-    const connection = { uri: fields.uri.trim(), dbName: fields.dbName.trim() };
-    const label = name.trim() || connection.dbName;
+    const label = (dialog.mode === 'edit' ? dialog.name : name.trim()) || connection.dbName;
     dialog.test = { state: 'testing', text: `Testing ${label} with mmk status…` };
     this.post();
     const check = await checkConnection(this.deps, project, label, connection);
@@ -459,8 +526,9 @@ export class ConsolePanel implements vscode.Disposable {
   }
 
   /**
-   * Add the dialog's environment: check every field, test the connection unless it just passed
-   * (or the user saves anyway), then keep it like the command does and switch to it.
+   * Save the dialog: check every field, test a new or changed connection unless it just passed
+   * (or the user saves anyway), then keep it like the commands do. A new environment is
+   * switched to.
    */
   private async saveEnvironment(
     message: Extract<ConsoleMessage, { type: 'saveEnvironment' }>,
@@ -470,39 +538,21 @@ export class ConsolePanel implements vscode.Disposable {
     if (!dialog || dialog.saving || !project) {
       return undefined;
     }
+    if (dialog.mode === 'edit') {
+      return this.saveEdit(dialog, project, message);
+    }
     const existing = this.deps.store.environments().map((environment) => environment.name);
     const nameProblem = environmentNameProblem(message.name, existing);
-    const fields = { uri: message.uri, dbName: message.dbName };
-    dialog.errors = {
-      ...(nameProblem === null ? {} : { name: nameProblem }),
-      ...this.connectionErrors(fields),
-    };
+    const { connection, errors } = await this.dialogConnection(dialog, message);
+    dialog.errors = { ...(nameProblem === null ? {} : { name: nameProblem }), ...errors };
     if (Object.keys(dialog.errors).length > 0) {
       this.post();
       return undefined;
     }
     const name = message.name.trim();
-    const connection = { uri: message.uri.trim(), dbName: message.dbName.trim() };
-    const tested =
-      dialog.passed?.uri === connection.uri && dialog.passed.dbName === connection.dbName;
-    dialog.saving = true;
-    if (!tested && !message.force) {
-      dialog.test = { state: 'testing', text: `Testing ${name} with mmk status…` };
-      this.post();
-      const check = await checkConnection(this.deps, project, name, connection);
-      if (this.dialog !== dialog) {
-        return undefined;
-      }
-      if (!check.ok) {
-        dialog.saving = false;
-        dialog.test = { state: 'failed', text: check.message };
-        dialog.canForce = true;
-        this.post();
-        return undefined;
-      }
-      dialog.test = { state: 'ok', text: connectedText(name, check.migrations, check.pending) };
+    if (!(await this.testBeforeSaving(dialog, project, name, connection, message.force))) {
+      return undefined;
     }
-    this.post();
     await saveEnvironment(
       this.deps,
       this.dir,
@@ -513,6 +563,105 @@ export class ConsolePanel implements vscode.Disposable {
     await this.deps.environments.select(name);
     this.post();
     return name;
+  }
+
+  /**
+   * Save changes to an environment: local's colour, or another's connection (tested when it
+   * changed), read-only flag and colour. Allowing runs asks first, as it always has.
+   */
+  private async saveEdit(
+    dialog: EnvironmentDialog,
+    project: ProjectSnapshot,
+    message: Extract<ConsoleMessage, { type: 'saveEnvironment' }>,
+  ): Promise<string | undefined> {
+    const environment = this.deps.store.environment(dialog.name);
+    if (!environment) {
+      this.dialog = null;
+      this.post();
+      return undefined;
+    }
+    if (dialog.local) {
+      dialog.saving = true;
+      await this.deps.environments.updateEntry(dialog.name, { color: message.color });
+      this.deps.environments.load();
+      this.dialog = null;
+      this.post();
+      return dialog.name;
+    }
+    const { connection, errors } = await this.dialogConnection(dialog, message);
+    dialog.errors = errors;
+    if (Object.keys(errors).length > 0) {
+      this.post();
+      return undefined;
+    }
+    const stored = await this.deps.environments.connection(this.dir, dialog.name);
+    const changed = stored?.uri !== connection.uri || stored.dbName !== connection.dbName;
+    if (
+      changed &&
+      !(await this.testBeforeSaving(dialog, project, dialog.name, connection, message.force))
+    ) {
+      return undefined;
+    }
+    if (environment.readOnly && !message.readOnly) {
+      const allowed = await this.deps.confirm(
+        `Allow runs on ${dialog.name}?`,
+        `Run links and the console will offer up, down and redo on ${dialog.name}. Each still asks first.`,
+        'Allow runs',
+      );
+      if (!allowed) {
+        dialog.saving = false;
+        this.post();
+        return undefined;
+      }
+    }
+    dialog.saving = true;
+    this.post();
+    if (changed) {
+      await this.deps.environments.saveConnection(this.dir, dialog.name, connection);
+    }
+    await this.deps.environments.updateEntry(dialog.name, {
+      readOnly: message.readOnly,
+      color: message.color,
+    });
+    this.deps.environments.load();
+    this.dialog = null;
+    this.post();
+    return dialog.name;
+  }
+
+  /**
+   * Test a connection before saving it, unless the last test passed for it or the user saves
+   * anyway. Leaves the dialog saving when it may go on; says what failed when it may not.
+   */
+  private async testBeforeSaving(
+    dialog: EnvironmentDialog,
+    project: ProjectSnapshot,
+    name: string,
+    connection: Connection,
+    force: boolean,
+  ): Promise<boolean> {
+    const tested =
+      dialog.passed?.uri === connection.uri && dialog.passed.dbName === connection.dbName;
+    dialog.saving = true;
+    if (tested || force) {
+      return true;
+    }
+    dialog.test = { state: 'testing', text: `Testing ${name} with mmk status…` };
+    this.post();
+    const check = await checkConnection(this.deps, project, name, connection);
+    if (this.dialog !== dialog) {
+      return false;
+    }
+    if (!check.ok) {
+      dialog.saving = false;
+      dialog.test = { state: 'failed', text: check.message };
+      dialog.canForce = true;
+      this.post();
+      return false;
+    }
+    dialog.test = { state: 'ok', text: connectedText(name, check.migrations, check.pending) };
+    dialog.passed = connection;
+    return true;
   }
 
   /** Hide the edited notice for the migrations it names, until one of them runs again */
@@ -828,7 +977,13 @@ export class ConsolePanel implements vscode.Disposable {
       drawer: this.drawerView(project, files),
       dialog: this.dialog
         ? {
-            kind: 'addEnvironment',
+            kind: this.dialog.mode === 'add' ? 'addEnvironment' : 'editEnvironment',
+            name: this.dialog.name,
+            local: this.dialog.local,
+            dbName: this.dialog.dbName,
+            readOnly: this.dialog.readOnly,
+            color: this.dialog.color,
+            stored: this.dialog.stored,
             test: this.dialog.test,
             errors: this.dialog.errors,
             saving: this.dialog.saving,
@@ -921,6 +1076,19 @@ export class ConsolePanel implements vscode.Disposable {
 </body>
 </html>`;
   }
+}
+
+/** A dialog that has just opened: nothing tested, nothing wrong yet */
+function openDialog(mode: 'add' | 'edit', fields: DialogFields): EnvironmentDialog {
+  return {
+    mode,
+    ...fields,
+    test: { state: 'idle', text: '' },
+    errors: {},
+    saving: false,
+    passed: null,
+    canForce: false,
+  };
 }
 
 /** What the dialog's connection test found, for tests: never the connection itself */

@@ -40,8 +40,8 @@ export function registerEnvironmentCommands(deps: Deps): vscode.Disposable[] {
     vscode.commands.registerCommand('mmk.addEnvironment', (args?: AddArgs) =>
       args?.name === undefined ? openAddDialog(args?.dir) : addEnvironment(deps, args),
     ),
-    vscode.commands.registerCommand('mmk.editEnvironment', (name?: unknown) =>
-      editEnvironment(deps, typeof name === 'string' ? name : undefined),
+    vscode.commands.registerCommand('mmk.editEnvironment', (target?: unknown) =>
+      editEnvironment(deps, environmentNameOf(deps, target)),
     ),
     vscode.commands.registerCommand('mmk.removeEnvironment', (name?: unknown) =>
       removeEnvironment(deps, typeof name === 'string' ? name : undefined),
@@ -362,7 +362,6 @@ async function askConnection(
   project: ProjectSnapshot,
   name: string,
   args: AddArgs,
-  current?: Connection,
 ): Promise<Connection | undefined> {
   for (;;) {
     const uri =
@@ -387,7 +386,7 @@ async function askConnection(
       (await vscode.window.showInputBox({
         title: `mmk: ${name} (3/4) · database`,
         prompt: 'The database whose changelog mmk reads (MMK_DB)',
-        value: databaseFromUri(uri) ?? current?.dbName ?? '',
+        value: databaseFromUri(uri) ?? '',
         ignoreFocusOut: true,
         validateInput: (value) => (value.trim() === '' ? 'Type the database name' : null),
       }));
@@ -484,60 +483,35 @@ async function pickRemote(deps: Deps, title: string): Promise<Environment | unde
 }
 
 /** Change an environment's connection or read-only flag, or remove it */
-async function editEnvironment(deps: Deps, name?: string): Promise<void> {
+/**
+ * Open the console's dialog for an environment (C13's form, in edit mode): its database,
+ * connection string, read-only flag and colour, and *Remove*. local has only its colour, since
+ * its connection is the project's config. Returns the console, for tests.
+ */
+async function editEnvironment(deps: Deps, name?: string): Promise<ConsolePanel | undefined> {
   const environment =
     name === undefined
-      ? await pickRemote(deps, 'mmk: Edit environment')
+      ? await pickAny(deps, 'mmk: Edit environment')
       : deps.store.environment(name);
-  if (!environment || environment.local) {
-    return;
+  if (!environment) {
+    return undefined;
   }
-  const action = await vscode.window.showQuickPick(
-    [
-      { label: '$(key) Change connection string…', id: 'connection' },
-      { label: '$(symbol-color) Change colour…', id: 'color' },
-      environment.readOnly
-        ? { label: '$(unlock) Allow runs…', id: 'writable' }
-        : { label: '$(lock) Make read-only', id: 'readOnly' },
-      { label: '$(trash) Remove…', id: 'remove' },
-    ],
-    { title: `mmk: Edit ${environment.name}` },
+  const panel = await vscode.commands.executeCommand<ConsolePanel | undefined>('mmk.openConsole');
+  await panel?.receive({ type: 'editEnvironment', name: environment.name });
+  return panel;
+}
+
+/** Pick any environment, local included */
+async function pickAny(deps: Deps, title: string): Promise<Environment | undefined> {
+  const picked = await vscode.window.showQuickPick(
+    deps.store.environments().map((environment) => ({
+      label: environment.name,
+      description: environment.readOnly ? 'read-only' : 'writable',
+      environment,
+    })),
+    { title },
   );
-  if (action?.id === 'connection') {
-    const project = await resolveProject(deps, undefined);
-    if (!project) {
-      return;
-    }
-    const current = await deps.environments.connection(project.dir, environment.name);
-    const connection = await askConnection(
-      deps,
-      project,
-      environment.name,
-      {},
-      current ?? undefined,
-    );
-    if (connection) {
-      await deps.environments.saveConnection(project.dir, environment.name, connection);
-      void vscode.window.showInformationMessage(
-        `Saved ${environment.name}'s connection for ${path.basename(project.dir)} in the OS keychain.`,
-      );
-    }
-  } else if (action?.id === 'color') {
-    await setEnvironmentColor(deps, environment.name);
-  } else if (action?.id === 'readOnly') {
-    await deps.environments.writeEntry({ name: environment.name, readOnly: true });
-  } else if (action?.id === 'writable') {
-    const confirmed = await deps.confirm(
-      `Allow runs on ${environment.name}?`,
-      `Run links and the sidebar will offer up, down and redo on ${environment.name}. Each still asks first.`,
-      'Allow runs',
-    );
-    if (confirmed) {
-      await deps.environments.writeEntry({ name: environment.name, readOnly: false });
-    }
-  } else if (action?.id === 'remove') {
-    await removeEnvironment(deps, environment.name);
-  }
+  return picked?.environment;
 }
 
 /** Remove an environment from settings and its connections from the keychain */

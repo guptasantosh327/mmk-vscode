@@ -196,7 +196,8 @@ export type PipelineMessage =
   | { type: 'console'; dir: string }
   | { type: 'create' }
   | { type: 'addEnvironment' }
-  | { type: 'color'; name: string };
+  /** Open the environment's dialog: its connection, read-only flag, colour, or *Remove* */
+  | { type: 'edit'; name: string };
 
 /**
  * True for a message the pipeline's webview may send, checked field by field: the webview draws
@@ -213,7 +214,7 @@ export function isPipelineMessage(value: unknown): value is PipelineMessage {
     case 'addEnvironment':
       return true;
     case 'select':
-    case 'color':
+    case 'edit':
       return typeof message.name === 'string';
     case 'review':
     case 'console':

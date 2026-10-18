@@ -3,10 +3,13 @@ import * as vscode from 'vscode';
 import {
   type Connection,
   type EnvironmentColor,
+  type EnvironmentHue,
   type EnvironmentSettings,
   LOCAL_ENVIRONMENT,
   type LeakedConnection,
   connectionKey,
+  environmentHue,
+  isEnvironmentColor,
   parseEnvironmentSettings,
   parseStoredConnection,
 } from '../mmk/environments.js';
@@ -112,6 +115,49 @@ export class EnvironmentRegistry implements vscode.Disposable {
     }
     await this.writeEntries(
       entries.map((existing, at) => (at === index ? { ...current, ...entry } : existing)),
+    );
+  }
+
+  /** The colour `name`'s entry sets, as a hue; null when it sets none, so it takes its default */
+  entryHue(name: string): EnvironmentHue | null {
+    const entry = this.entries().find((candidate) => entryName(candidate) === name);
+    const color =
+      typeof entry === 'object' && entry !== null && 'color' in entry ? entry.color : undefined;
+    return isEnvironmentColor(color) ? environmentHue(color) : null;
+  }
+
+  /**
+   * Change an environment's read-only flag and colour in `mmk.environments`, keeping the rest of
+   * its entry and its place. A null colour removes the entry's colour, so it takes its default
+   * again; an entry left with only `local`'s name is removed.
+   */
+  async updateEntry(
+    name: string,
+    changes: { readOnly?: boolean; color?: EnvironmentHue | null },
+  ): Promise<void> {
+    const entries = this.entries();
+    const index = entries.findIndex((existing) => entryName(existing) === name);
+    const current = index === -1 ? null : entries[index];
+    const { color: previous, ...entry }: Record<string, unknown> =
+      typeof current === 'object' && current !== null ? { ...current } : { name };
+    if (changes.readOnly !== undefined) {
+      entry.readOnly = changes.readOnly;
+    }
+    const color = changes.color === undefined ? previous : changes.color;
+    if (color !== null && color !== undefined) {
+      entry.color = color;
+    }
+    const empty = Object.keys(entry).length === 1 && name === LOCAL_ENVIRONMENT;
+    if (index === -1) {
+      if (!empty) {
+        await this.writeEntries([...entries, entry]);
+      }
+      return;
+    }
+    await this.writeEntries(
+      empty
+        ? entries.filter((_, at) => at !== index)
+        : entries.map((existing, at) => (at === index ? entry : existing)),
     );
   }
 

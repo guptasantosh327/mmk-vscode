@@ -316,6 +316,9 @@ describe('isConsoleMessage', () => {
       { type: 'copy', what: 'lock' },
       { type: 'dismissNotice' },
       { type: 'addEnvironment' },
+      { type: 'editEnvironment' },
+      { type: 'editEnvironment', name: 'staging' },
+      { type: 'removeEnvironment' },
       { type: 'closeDialog' },
       { type: 'testEnvironment', name: 'qa', uri: 'mongodb://qa.example.com', dbName: 'orders_qa' },
       {
@@ -358,6 +361,7 @@ describe('isConsoleMessage', () => {
       { type: 'rollBack', batch: 2.5 },
       { type: 'rollBack', batch: '3' },
       { type: 'copy', what: 'everything' },
+      { type: 'editEnvironment', name: 42 },
       { type: 'testEnvironment', name: 'qa', uri: 42, dbName: 'orders_qa' },
       { type: 'testEnvironment', name: 'qa', uri: 'x'.repeat(5000), dbName: 'orders_qa' },
       {

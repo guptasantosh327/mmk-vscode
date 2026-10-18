@@ -49,6 +49,10 @@ sidebar, and what mongo-migrate-kit 1.6.0 adds. It still works with mongo-migrat
   read-only (on by default) and a colour. *Test connection* asks mmk (`mmk status`) and says what
   it read, or shows mmk's error with *Add anyway*. Add tests it first unless it just passed. The
   connection string goes to the keychain only; it's never sent back to the form.
+- **Edit and remove environments in the same form**: *Edit…* on the console's environment line,
+  the gear on a sidebar card, the tree's environment row or `mmk: Edit environment…`. The
+  connection string field starts empty and keeps the stored one unless you type a new one (which
+  is tested first); *Remove* asks first; allowing runs asks first. `local` has only its colour.
 - **Dismiss** next to *Review it* on the console's "edited after it ran" notice: it stays hidden
   until that migration runs again. The console's notices now show together instead of taking
   turns.

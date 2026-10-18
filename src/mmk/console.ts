@@ -48,7 +48,9 @@ export type ConsoleMessage =
   | { type: 'closeDrawer' }
   | { type: 'rollBack'; batch: number }
   | { type: 'unlock' }
-  | { type: 'editEnvironment' }
+  /** Open the dialog for an environment: the selected one unless it names another */
+  | { type: 'editEnvironment'; name?: string }
+  | { type: 'removeEnvironment' }
   | { type: 'showOutput' }
   | { type: 'dismissNotice' }
   | { type: 'closeDialog' }
@@ -93,11 +95,13 @@ export function isConsoleMessage(value: unknown): value is ConsoleMessage {
     case 'applyPlan':
     case 'closeDrawer':
     case 'unlock':
-    case 'editEnvironment':
     case 'showOutput':
     case 'dismissNotice':
     case 'closeDialog':
+    case 'removeEnvironment':
       return true;
+    case 'editEnvironment':
+      return message.name === undefined || isText(message.name, MAX_FIELD);
     case 'testEnvironment':
       return (
         isText(message.name, MAX_FIELD) &&

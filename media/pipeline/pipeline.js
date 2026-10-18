@@ -91,11 +91,11 @@
         {
           type: 'button',
           class: 'icon-button color-button',
-          title: `Change ${item.name}'s colour…`,
-          'aria-label': `Change ${item.name}'s colour`,
-          onclick: () => send({ type: 'color', name: item.name }),
+          title: `Edit ${item.name}…`,
+          'aria-label': `Edit ${item.name}`,
+          onclick: () => send({ type: 'edit', name: item.name }),
         },
-        [icon('symbol-color')],
+        [icon('gear')],
       ),
     ]);
   }

@@ -159,7 +159,8 @@ takes that theme's colours.
   **C9** confirm rolling back a batch.
 - **C10** the diff against the version that ran · **C11** lock held (from a run's
   `LOCK_ALREADY_HELD`; R11 shows it before a run) · **C12** can't connect (mmk's error as is) ·
-  **C13** add environment (built as the console's *Add environment* dialog, 2026-10-19).
+  **C13** add environment (built as the console's *Add environment* dialog, 2026-10-19; the same
+  dialog edits and removes one).
 - **Lock & notices** (page of the same name, owner's choice 2026-10-19: design **A**): another
   run's lock sits on a line under the tabs (environment, writable or read-only, `host/db`, then
   "Locked by ci on deploy-runner-7 · 4 min" and *Release…*); a click opens the details (A2). Tabs

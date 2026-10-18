@@ -215,7 +215,7 @@ describe('isPipelineMessage', () => {
       { type: 'console', dir: '/work/api' },
       { type: 'create' },
       { type: 'addEnvironment' },
-      { type: 'color', name: 'staging' },
+      { type: 'edit', name: 'staging' },
     ]) {
       expect(isPipelineMessage(message), JSON.stringify(message)).toBe(true);
     }
@@ -225,7 +225,8 @@ describe('isPipelineMessage', () => {
       { type: 'select' },
       { type: 'pick', dir: '/work/api' },
       { type: 'review', dir: 1 },
-      { type: 'color' },
+      { type: 'edit' },
+      { type: 'color', name: 'staging' },
     ]) {
       expect(isPipelineMessage(message), JSON.stringify(message)).toBe(false);
     }

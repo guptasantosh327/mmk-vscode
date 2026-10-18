@@ -91,6 +91,10 @@ This needs mongo-migrate-kit 1.6.0 or later, which reports the checksum each mig
   before it's added ("Connected: mmk status read 8 migrations on qa, 3 of them pending"), then kept
   in your **OS keychain**. It reaches mmk as `MMK_URI` / `MMK_DB` and is never written to settings,
   logs or the command line.
+- **Edit or remove an environment** in the same form: *Edit…* on the console's environment line,
+  the gear on its card in the sidebar, or `mmk: Edit environment…`. Change the database, the
+  connection string (leave it empty to keep the stored one), read-only or the colour, or *Remove*
+  it (after a confirmation). For `local`, only its colour.
 - **Read-only by default.** Anything but `local` only ever runs `status`, `list` and `dry-run`. The
   run links offer *Dry run* and *Copy CLI command*, and every write command refuses in code, not
   just in the UI. Deploys stay with your pipeline.

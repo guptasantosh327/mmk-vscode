@@ -341,6 +341,11 @@
           "group": "inline@2"
         },
         {
+          "command": "mmk.editEnvironment",
+          "when": "view == mmk.migrations && viewItem == mmk.env",
+          "group": "3_env@0"
+        },
+        {
           "command": "mmk.setEnvironmentColor",
           "when": "view == mmk.migrations && viewItem == mmk.env",
           "group": "3_env@1"

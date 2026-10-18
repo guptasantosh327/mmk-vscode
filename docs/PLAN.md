@@ -396,6 +396,11 @@ when that migration runs again. **Add environment** became C13's dialog in the c
 (`mmk.addEnvironment` without arguments; with them, the old prompts, for scripts and tests): one
 form, a `mmk status` test (`checkConnection`), and `saveEnvironment` to the keychain and settings.
 The connection string is never in the view sent to the webview (an integration test checks).
+**Edit and remove** (owner, 2026-10-19: "no option to edit or delete the environment") use the
+same dialog in edit mode: `mmk.editEnvironment` opens it (the console's line, the pipeline card's
+gear, the tree row, the palette); an empty connection string keeps the stored one; a changed one
+is tested; allowing runs and *Remove* confirm first; `local` edits only its colour
+(`EnvironmentRegistry.updateEntry`, where a null colour goes back to the default).
 
 *Built as:*
 - **Task 1 and 2 (C1–C4):** `src/mmk/console.ts` builds the console from `buildMatrix` and

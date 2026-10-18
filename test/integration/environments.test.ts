@@ -627,9 +627,72 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
       dbName: 'mmk_qa',
     });
 
+    // Removed from the same dialog, after the usual confirmation
+    await panel.receive({ type: 'editEnvironment', name: 'qa' });
     api.setConfirm(() => true);
-    assert.equal(await vscode.commands.executeCommand('mmk.removeEnvironment', 'qa'), true);
-    await vscode.commands.executeCommand('mmk.selectEnvironment', 'local');
+    assert.equal(await panel.receive({ type: 'removeEnvironment' }), true);
+    assert.equal(panel.view().dialog, null);
+    assert.equal(await api.environments.connection(workspaceDir, 'qa'), null);
+    assert.equal(api.store.selected().name, 'local');
+    panel.dispose();
+  });
+
+  test('edits an environment in the same dialog, keeping its stored connection', async () => {
+    const uri = mongo?.getUri() ?? '';
+    const entry = (name: string): unknown =>
+      vscode.workspace
+        .getConfiguration('mmk')
+        .get<Array<{ name: string }>>('environments')
+        ?.find((candidate) => candidate.name === name);
+    const panel = await vscode.commands.executeCommand<ConsolePanel>(
+      'mmk.editEnvironment',
+      'staging',
+    );
+    assert.ok(panel, 'The console should open with the dialog');
+    assert.deepEqual(
+      {
+        kind: panel.view().dialog?.kind,
+        name: panel.view().dialog?.name,
+        readOnly: panel.view().dialog?.readOnly,
+        stored: panel.view().dialog?.stored,
+      },
+      { kind: 'editEnvironment', name: 'staging', readOnly: true, stored: true },
+    );
+    assert.ok(!JSON.stringify(panel.view()).includes(uri), 'The stored string is never sent');
+
+    // An empty connection string keeps the stored one, so nothing needs testing
+    const database = panel.view().dialog?.dbName ?? '';
+    assert.equal(
+      await panel.receive({
+        type: 'saveEnvironment',
+        name: 'staging',
+        uri: '',
+        dbName: database,
+        readOnly: true,
+        color: 'orange',
+        force: false,
+      }),
+      'staging',
+    );
+    assert.equal(panel.view().dialog, null);
+    assert.deepEqual(entry('staging'), { name: 'staging', readOnly: true, color: 'orange' });
+    assert.equal((await api.environments.connection(workspaceDir, 'staging'))?.uri, uri);
+
+    // local: only its colour, and Automatic puts its default back
+    for (const color of ['blue', null] as const) {
+      await panel.receive({ type: 'editEnvironment', name: 'local' });
+      assert.equal(panel.view().dialog?.local, true);
+      await panel.receive({
+        type: 'saveEnvironment',
+        name: 'local',
+        uri: '',
+        dbName: '',
+        readOnly: false,
+        color,
+        force: false,
+      });
+      assert.deepEqual(entry('local'), color ? { name: 'local', color } : undefined);
+    }
     panel.dispose();
   });
 

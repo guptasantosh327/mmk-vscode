@@ -223,6 +223,10 @@
     return el('div', { class: 'env-line' }, [
       el('span', { class: 'env-name', text: line.name }),
       el('span', { class: 'muted', text: facts }),
+      button('Edit…', 'edit', () => send({ type: 'editEnvironment' }), {
+        class: 'link',
+        title: `Edit ${line.name}: its connection, read-only, colour, or remove it`,
+      }),
       el('span', { class: 'spacer' }),
       ...right,
       lock && lockOpen ? lockPopover(line, lock) : null,
@@ -819,9 +823,22 @@
   const HUES = ['green', 'blue', 'purple', 'yellow', 'orange', 'red'];
   let form = null;
   let parts = null;
+  // Which dialog the form belongs to, so opening another one starts afresh
+  let dialogKey = null;
 
-  function emptyForm() {
-    return { name: '', dbName: '', uri: '', readOnly: true, color: null, showUri: false };
+  function formFor(dialog) {
+    return {
+      name: dialog.name,
+      dbName: dialog.dbName,
+      uri: '',
+      readOnly: dialog.readOnly,
+      color: dialog.color,
+      showUri: false,
+    };
+  }
+
+  function editing() {
+    return view?.dialog?.kind === 'editEnvironment';
   }
 
   function field(label, input, errorKey, hint) {
@@ -848,14 +865,22 @@
     return input;
   }
 
-  function buildDialog() {
-    form = form || emptyForm();
+  function buildDialog(dialog) {
+    form = formFor(dialog);
     parts = { errors: {} };
-    const name = textInput('name', { placeholder: 'qa', 'aria-label': 'Name' });
+    const edit = dialog.kind === 'editEnvironment';
+    const name = textInput('name', {
+      placeholder: 'qa',
+      'aria-label': 'Name',
+      disabled: edit ? 'disabled' : null,
+      title: edit ? 'An environment keeps its name: add another to use a new one' : null,
+    });
     const database = textInput('dbName', { placeholder: 'orders_qa', 'aria-label': 'Database' });
     const uri = textInput('uri', {
       type: form.showUri ? 'text' : 'password',
-      placeholder: 'mongodb+srv://user:password@cluster0.example.net',
+      placeholder: dialog.stored
+        ? 'Stored in your keychain: leave empty to keep it'
+        : 'mongodb+srv://user:password@cluster0.example.net',
       'aria-label': 'Connection string',
       autocomplete: 'off',
     });
@@ -913,11 +938,50 @@
       ),
     );
     parts.test = el('div', { class: 'test-line' });
-    parts.add = button('Add environment', null, () => save(false), { class: 'primary' });
+    parts.add = button(edit ? 'Save' : 'Add environment', null, () => save(false), {
+      class: 'primary',
+    });
     parts.cancel = button('Cancel', null, () => send({ type: 'closeDialog' }));
-    const box = el('div', { class: 'dialog', role: 'dialog', 'aria-label': 'Add environment' }, [
+    parts.remove =
+      edit && !dialog.local
+        ? button(`Remove ${dialog.name}…`, 'trash', () => send({ type: 'removeEnvironment' }), {
+            class: 'quiet danger',
+          })
+        : null;
+    const title = edit ? `Edit ${dialog.name}` : 'Add environment';
+    const colour = el('div', { class: 'field' }, [
+      el('span', { class: 'field-label', text: 'Colour' }),
+      el('div', { class: 'swatches', role: 'group', 'aria-label': 'Colour' }, swatches),
+    ]);
+    const body = dialog.local
+      ? [
+          el('p', {
+            class: 'muted',
+            text: "local's connection comes from this project's config (mmk.config.js and .env), and runs are always allowed there. Here you can change its colour.",
+          }),
+          colour,
+        ]
+      : [
+          el('div', { class: 'two' }, [
+            field('Name', name, 'name'),
+            field('Database', database, 'dbName'),
+          ]),
+          field(
+            'Connection string',
+            el('span', { class: 'secret' }, [uri, eye]),
+            'uri',
+            'Kept in your OS keychain and passed to mmk as MMK_URI. Never written to settings, logs or the command line.',
+          ),
+          el('div', { class: 'toggle-row' }, [
+            switchButton,
+            el('div', { class: 'toggle-text' }, [el('span', { text: 'Read-only' }), readOnlyText]),
+          ]),
+          colour,
+          parts.test,
+        ];
+    const box = el('div', { class: 'dialog', role: 'dialog', 'aria-label': title }, [
       el('div', { class: 'dialog-head' }, [
-        el('h2', { text: 'Add environment' }),
+        el('h2', { text: title }),
         el(
           'button',
           {
@@ -929,28 +993,13 @@
           [icon('close')],
         ),
       ]),
-      el('div', { class: 'dialog-body' }, [
-        el('div', { class: 'two' }, [
-          field('Name', name, 'name'),
-          field('Database', database, 'dbName'),
-        ]),
-        field(
-          'Connection string',
-          el('span', { class: 'secret' }, [uri, eye]),
-          'uri',
-          'Kept in your OS keychain and passed to mmk as MMK_URI. Never written to settings, logs or the command line.',
-        ),
-        el('div', { class: 'toggle-row' }, [
-          switchButton,
-          el('div', { class: 'toggle-text' }, [el('span', { text: 'Read-only' }), readOnlyText]),
-        ]),
-        el('div', { class: 'field' }, [
-          el('span', { class: 'field-label', text: 'Colour' }),
-          el('div', { class: 'swatches', role: 'group', 'aria-label': 'Colour' }, swatches),
-        ]),
-        parts.test,
+      el('div', { class: 'dialog-body' }, body),
+      el('div', { class: 'dialog-foot' }, [
+        parts.remove,
+        el('span', { class: 'spacer' }),
+        parts.cancel,
+        parts.add,
       ]),
-      el('div', { class: 'dialog-foot' }, [parts.cancel, parts.add]),
     ]);
     dialogRoot.replaceChildren(
       el('div', { class: 'overlay dialog-overlay' }, [
@@ -959,11 +1008,11 @@
       ]),
     );
     updateAddLabel();
-    name.focus();
+    (edit ? database : name).focus();
   }
 
   function updateAddLabel() {
-    if (!parts) return;
+    if (!parts || editing()) return;
     const label = parts.add.querySelector('span');
     if (label) label.textContent = form.name.trim() ? `Add ${form.name.trim()}` : 'Add environment';
   }
@@ -987,12 +1036,21 @@
         dialogRoot.replaceChildren();
         form = null;
         parts = null;
+        dialogKey = null;
       }
       return;
     }
-    if (!parts) buildDialog();
-    for (const key of ['name', 'uri', 'dbName']) {
-      parts.errors[key].textContent = dialog.errors[key] || '';
+    const key = `${dialog.kind}:${dialog.name}`;
+    if (!parts || key !== dialogKey) {
+      dialogKey = key;
+      buildDialog(dialog);
+    }
+    parts.add.toggleAttribute('disabled', dialog.saving);
+    parts.cancel.toggleAttribute('disabled', dialog.saving);
+    if (parts.remove) parts.remove.toggleAttribute('disabled', dialog.saving);
+    if (dialog.local) return;
+    for (const field of ['name', 'uri', 'dbName']) {
+      parts.errors[field].textContent = dialog.errors[field] || '';
     }
     const test = dialog.test;
     const testButton = button(
@@ -1001,9 +1059,12 @@
       () => send({ type: 'testEnvironment', name: form.name, uri: form.uri, dbName: form.dbName }),
       { class: 'link', disabled: test.state === 'testing' || dialog.saving ? 'disabled' : null },
     );
+    const idle = editing()
+      ? 'Save tests a changed connection with mmk status first.'
+      : 'Add tests the connection with mmk status first.';
     const line =
       test.state === 'idle'
-        ? [el('span', { class: 'muted', text: 'Add tests the connection with mmk status first.' })]
+        ? [el('span', { class: 'muted', text: idle })]
         : test.state === 'testing'
           ? [icon('sync codicon-modifier-spin'), el('span', { text: test.text })]
           : test.state === 'ok'
@@ -1015,13 +1076,13 @@
         ...line,
         el('span', { class: 'spacer' }),
         dialog.canForce && !dialog.saving
-          ? button('Add anyway', null, () => save(true), { class: 'link' })
+          ? button(editing() ? 'Save anyway' : 'Add anyway', null, () => save(true), {
+              class: 'link',
+            })
           : null,
         testButton,
       ].filter(Boolean),
     );
-    parts.add.toggleAttribute('disabled', dialog.saving);
-    parts.cancel.toggleAttribute('disabled', dialog.saving);
   }
 
   // Escape closes the lock's details, the dialog, then a plan, a result or a finished run (never
