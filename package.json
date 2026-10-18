@@ -67,6 +67,14 @@
     "views": {
       "mmk": [
         {
+          "type": "webview",
+          "id": "mmk.pipeline",
+          "name": "Environments",
+          "icon": "media/mmk.svg",
+          "contextualTitle": "mmk",
+          "when": "mmk.hasProject"
+        },
+        {
           "id": "mmk.migrations",
           "name": "Migrations",
           "icon": "media/mmk.svg",

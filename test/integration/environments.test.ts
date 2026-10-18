@@ -115,6 +115,49 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     );
   });
 
+  test('shows the environments as a pipeline in the sidebar, and reviews from it (B)', async () => {
+    let [project] = api.pipeline.view().projects;
+    assert.ok(project, 'The pipeline should show the project');
+    assert.deepEqual(
+      project.model.steps.map((step) => [step.name, step.readOnly, step.selected, step.pending]),
+      [
+        ['local', false, true, 2],
+        ['staging', true, false, 1],
+      ],
+    );
+    assert.match(project.model.steps[1]?.latest ?? '', /^add-email-index\.js · batch 2 · /);
+    assert.deepEqual(
+      project.model.items.map((item) => [item.label, item.environments.map((env) => env.kind)]),
+      [
+        ['add-email-index.js', ['pending', 'applied']],
+        ['backfill-user-status.js', ['pending', 'pending']],
+      ],
+    );
+
+    // Picking a step selects that environment everywhere.
+    await api.pipeline.receive({ type: 'select', name: 'staging' });
+    assert.equal(api.store.selected().name, 'staging');
+    [project] = api.pipeline.view().projects;
+    assert.equal(project?.model.selected, 'staging');
+    await api.pipeline.receive({ type: 'select', name: 'local' });
+    assert.equal(api.store.selected().name, 'local');
+
+    // Review opens the console's plan: a dry run, nothing written.
+    const steps = (await api.pipeline.receive({ type: 'review', dir: workspaceDir })) as Array<{
+      file: string;
+    }>;
+    assert.deepEqual(
+      steps.map((step) => step.file),
+      [EMAIL_INDEX, BACKFILL],
+    );
+    const panel = await vscode.commands.executeCommand<ConsolePanel>('mmk.openConsole', {
+      dir: workspaceDir,
+    });
+    assert.equal(panel?.view().drawer?.kind, 'plan');
+    panel?.dispose();
+    await api.idle();
+  });
+
   test('shows the other environment next to the run links on local', async () => {
     assert.deepEqual(await runLinks(EMAIL_INDEX), [
       'Pending on local',

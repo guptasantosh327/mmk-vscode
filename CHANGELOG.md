@@ -11,6 +11,17 @@ All notable changes to this extension are documented here.
   batches. It replaces the environments matrix; *Compare all environments* opens it on *Only
   differences*. Its buttons run the same commands as the rest of the extension, so read-only
   environments and confirmations work the same way.
+- **Plan, run and result in the console:** *Plan* shows mmk's dry run (what up would apply, in
+  order) and *Apply* runs it. While mmk runs in the project, its own output shows as it comes. The
+  result lists each migration, mmk's error as is when it stops, where the environment stands now,
+  and the next step (open the file, roll back the batch, release a held lock).
+- **Roll back a batch** (`mmk: Roll back a batch…`, `mmk down --batch N`): the confirmation names
+  every migration in the batch. Refused on read-only environments.
+- **Environments pipeline** at the top of the mmk sidebar: each environment as a step with its
+  pending count, the latest migration applied there and what needs attention, then the selected
+  environment's pending migrations and *Review N pending*.
+- An environment that can't be read shows mmk's message as is, with *Try again*, *Edit
+  connection* and *Show output*.
 
 ## 1.0.1 · unreleased
 

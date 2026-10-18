@@ -366,7 +366,11 @@ environment, and need the modal before rolling back a batch.
 **Exit criteria:** from the console alone, plan and apply local's pending migrations, roll back a
 batch and compare every environment, with nothing written to a read-only environment.
 
-*Built as (so far):*
+**PHASE 7 COMPLETE** (2026-10-18): every exit criterion is covered by an integration test
+(plan and apply, batch rollback behind its modal, comparison, a read-only plan that writes
+nothing). R11 and R12 stay optional and open.
+
+*Built as:*
 - **Task 1 and 2 (C1–C4):** `src/mmk/console.ts` builds the console from `buildMatrix` and
   `buildStatusModel`: tabs with each environment's pending and needs-attention counts, the four
   filters, the rows, the picked migration (the user's pick, else the first pending on the selected
@@ -379,5 +383,23 @@ batch and compare every environment, with nothing written to a read-only environ
   migration's detail offers it, through the existing `mmk.*` command with `{ dir, file }`.
 - The CLI line is Copy CLI command's: `terminalCommand`, and on another environment `MMK_URI`
   as a placeholder and `MMK_DB` from the stored connection.
-- The webview was checked in headless Chrome with Dark Modern's colours (no script errors; C1–C4
-  as drawn). Integration tests drive the panel through `receive()`.
+- **Task 3 (C9):** `mmk.downBatch` ("Roll back a batch…") runs `mmk down --batch N` on the
+  selected environment after a modal naming every file in the batch (from its status rows); with
+  no batch given it offers the environment's batches. A contract test pins the JSON (reverted
+  newest first) and mmk's `INVALID_ARGUMENT` for a batch that isn't there.
+- **Task 4 (C6–C8):** *Plan* reads `dry-run up` through the store (a read, allowed everywhere).
+  *Apply* goes through `applyPending` in `src/commands/run.ts`: the same read-only refusal and
+  remote confirmation as *Apply all*, but it returns the outcome instead of a notification.
+  `buildResult` lays out mmk's results; when mmk stops early without them (1.5, before R10), what
+  ran comes from the status read after the run, never from a guess. The store emits mmk's stderr
+  lines (`onDidOutput`, credentials hidden), so a run from anywhere shows live in the console.
+- **Task 5 (C10–C12):** edited files link to *Show applied version*; a result with
+  `LOCK_ALREADY_HELD` offers *Release the lock…* (the existing unlock, with its modal); an
+  environment that can't be read shows mmk's message as is, with *Try again*, *Edit connection*
+  (not for local, whose connection comes from the project) and *Show output*. Counts and batches
+  of an unreadable environment aren't shown.
+- **Task 6 (B):** `src/mmk/pipeline.ts` builds the pipeline from the same matrix inputs as the
+  console (`matrixInputs`); `src/views/pipeline.ts` is a `WebviewView` (`mmk.pipeline`) above the
+  tree. *Review* opens the console and its plan; picking a migration opens the console on it.
+- Both webviews were checked in headless Chrome with Dark Modern's colours (no script errors;
+  C1–C4, C6–C8, C11, C12 and B as drawn). Integration tests drive them through `receive()`.

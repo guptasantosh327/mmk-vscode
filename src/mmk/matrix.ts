@@ -1,6 +1,7 @@
 import type { WireStatusRow } from './contract.js';
 import type { Environment } from './environments.js';
 import { displayName } from './naming.js';
+import type { ProjectSnapshot } from './store.js';
 
 /**
  * One cell of the matrix: what mmk's status row for a file says on one environment.
@@ -243,4 +244,28 @@ function list(inputs: readonly MatrixInput[], word: 'and' | 'or' = 'and'): strin
     return names[0] ?? '';
   }
   return `${names.slice(0, -1).join(', ')} ${word} ${names.at(-1)}`;
+}
+
+/**
+ * Each environment's input for the matrix, from what the store last read for a project: its rows,
+ * or why there are none (not set up, mmk's error, still reading).
+ */
+export function matrixInputs(
+  project: ProjectSnapshot | undefined,
+  environments: readonly Environment[],
+): MatrixInput[] {
+  return environments.map((environment): MatrixInput => {
+    const status = project?.environments[environment.name];
+    const database = status?.database ?? null;
+    if (!status || status.connected === false) {
+      return { environment, rows: null, state: 'not-set-up', database };
+    }
+    if (status.error) {
+      return { environment, rows: null, state: 'error', message: status.error.message, database };
+    }
+    if (!status.rows) {
+      return { environment, rows: null, state: 'loading', database };
+    }
+    return { environment, rows: status.rows, state: 'ok', database };
+  });
 }

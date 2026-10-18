@@ -21,7 +21,7 @@ import {
 import { parseStatusRows } from '../../mmk/contract.js';
 import type { WireStatusRow } from '../../mmk/contract.js';
 import type { Environment } from '../../mmk/environments.js';
-import { type MatrixInput, buildMatrix } from '../../mmk/matrix.js';
+import { type MatrixInput, buildMatrix, matrixInputs } from '../../mmk/matrix.js';
 import type { ProjectSnapshot } from '../../mmk/store.js';
 
 /** Where the compared files come from */
@@ -632,16 +632,8 @@ export class ConsolePanel implements vscode.Disposable {
         ? { environment, rows: null, state: 'error', message: read.error, database }
         : { environment, rows: read.rows, state: 'ok', database };
     }
-    if (!status || status.connected === false) {
-      return { environment, rows: null, state: 'not-set-up', database };
-    }
-    if (status.error) {
-      return { environment, rows: null, state: 'error', message: status.error.message, database };
-    }
-    if (!status.rows) {
-      return { environment, rows: null, state: 'loading', database };
-    }
-    return { environment, rows: status.rows, state: 'ok', database };
+    const [input] = matrixInputs(project, [environment]);
+    return input ?? { environment, rows: null, state: 'loading', database };
   }
 
   private html(codicons: vscode.Uri, media: vscode.Uri): string {

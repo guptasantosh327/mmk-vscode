@@ -10,10 +10,11 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Phase 7 in progress** (2026-10-18, branch `feat/console`, stacked on
-  `chore/rename-mongo-migrate-kit`): the migration console and the pipeline sidebar
-  (`docs/PLAN.md`). Built: the console overview (C1–C4); next, batch rollback, plan → run →
-  result inside the console, then the pipeline sidebar.
+- **Phase 7 complete** (2026-10-18, branch `feat/console`, stacked on
+  `chore/rename-mongo-migrate-kit`, not pushed): the migration console (C1–C12) and the pipeline
+  sidebar (B), `docs/PLAN.md`. Waiting for the owner's go-ahead. Optional mmk requests R11 (lock
+  holder without releasing it) and R12 (`plannedBatch` in dry-run) are open, not built. The
+  README's environments GIF still shows the old matrix: record it again with the next mmk.
 - **1.0.1 ready to publish** (2026-10-18, on `chore/rename-mongo-migrate-kit`): the extension takes the library's
   name, **Mongo Migrate Kit**, and a new ID, `guptasantosh327.mongo-migrate-kit` (owner's
   decision). 1.0.0 went out on the VS Code Marketplace as `guptasantosh327.mmk-vscode` ("mmk for
@@ -212,7 +213,8 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
 │   │   ├── environments.ts      # mmk.environments, read-only rule (assertCanRun), MMK_URI/MMK_DB
 │   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
-│   │   ├── console.ts           # the migration console's model (Phase 7) and its message check
+│   │   ├── console.ts           # the migration console's model, plan and result (Phase 7)
+│   │   ├── pipeline.ts          # the environments pipeline's model (Phase 7, design B)
 │   │   └── redact.ts            # mask credentials in anything logged
 │   ├── git/                     # NO vscode imports
 │   │   ├── git.ts               # runGit (execFile, bytes out)
@@ -228,6 +230,7 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
 │   │   ├── applied-protection.ts # B1/B2: diagnostic, hover, mmk-applied: docs, diff, restore
 │   │   ├── statusbar.ts
 │   │   ├── branch-watch.ts      # after a checkout: local migrations from another branch
+│   │   ├── pipeline.ts          # the pipeline webview view; its JS/CSS are in media/pipeline/
 │   │   └── console/panel.ts     # the migration console webview; its JS/CSS are in media/console/
 ├── test/
 │   ├── unit/                    # vitest

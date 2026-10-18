@@ -1,0 +1,289 @@
+/* The environments pipeline. Only VS Code theme colours, so it follows every theme. */
+body {
+  padding: 8px 12px 12px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+h2 {
+  margin: 8px 0 6px;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+h3 {
+  margin: 14px 0 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+p {
+  margin: 4px 0;
+}
+
+.muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.small {
+  font-size: 0.9em;
+}
+
+.spacer {
+  flex: 1;
+}
+
+button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+button.primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+button.wide {
+  justify-content: center;
+  width: 100%;
+}
+
+button.link {
+  padding: 0;
+  border: 0;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+}
+
+button.link:hover {
+  text-decoration: underline;
+}
+
+.add {
+  margin-top: 14px;
+}
+
+/* The steps, joined by a line */
+.pipeline {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  gap: 10px;
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.step::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: -14px;
+  left: 4px;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.step:last-child::before {
+  display: none;
+}
+
+.node {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 12px;
+  border: 1px solid var(--vscode-descriptionForeground);
+  border-radius: 50%;
+  background: var(--vscode-sideBar-background);
+  z-index: 1;
+}
+
+.step.selected .node {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-focusBorder);
+}
+
+.card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  align-items: stretch;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  background: none;
+  text-align: left;
+}
+
+.card:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.card[aria-pressed="true"] {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.card-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.card-head .name {
+  font-weight: 600;
+}
+
+.card-head .codicon-circle-filled {
+  color: var(--vscode-testing-iconPassed);
+  font-size: 10px;
+}
+
+.line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  display: flex;
+  gap: 5px;
+  align-items: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.note.warning .codicon {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.note.error {
+  color: var(--vscode-errorForeground);
+}
+
+.badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 10px;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+  font-size: 0.85em;
+}
+
+/* Pending migrations */
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: stretch;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  background: none;
+  text-align: left;
+}
+
+.item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.item .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 2px;
+}
+
+.wrap {
+  overflow-wrap: anywhere;
+}
+
+.env {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  color: var(--vscode-descriptionForeground);
+}
+
+.env .codicon {
+  font-size: 12px;
+}
+
+.env.applied .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.env.pending .codicon {
+  color: var(--vscode-charts-blue);
+}
+
+.env.edited .codicon,
+.env.unadopted .codicon {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.actions .row {
+  display: flex;
+  gap: 6px;
+}
+
+.actions .row button {
+  flex: 1;
+  justify-content: center;
+}

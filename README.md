@@ -37,6 +37,10 @@ whatever it shows, `npx mmk` says the same in a terminal.
 
 ## Your local database
 
+- **The environments pipeline** at the top of the mmk sidebar: local → staging → prod, each with
+  its pending count, the migration applied there last and anything that needs attention (or
+  mmk's error, when it can't be read). Below it, the selected environment's pending migrations
+  and *Review N pending*, which opens the console's plan.
 - **The mmk sidebar:** what's pending, what was edited after it ran, and what's applied, grouped by
   batch. *Apply all* and *Dry run* sit next to the pending list.
 - **Create a migration** with the `+`: type a name, see the file mmk will create, pick JavaScript or
@@ -44,6 +48,12 @@ whatever it shows, `npx mmk` says the same in a terminal.
 - **Run links** above `up()` and `down()`: *Run up on local*, *Dry run*, *Redo*, *Run down on local*,
   with the batch and the time once it has run.
 - **Badges and status bar:** `●` on pending files, `!` on edited ones, and `mmk: local · 3 pending`.
+- **Plan, then apply:** in the migration console, *Plan* shows what `up` would apply, in order (mmk's
+  dry run); *Apply* runs it. While mmk runs, its own output shows as it comes, and the result says
+  what ran, what failed and where the database stands, with the next step: open the file, roll
+  back the batch, or release a held lock.
+- **Roll back a batch** (`mmk: Roll back a batch…`, or from the console): the confirmation names
+  every migration in it.
 - **Nothing runs on its own.** Every run is a click; rolling back, redoing and releasing the lock
   ask first. *Copy CLI command* gives you the same command for a terminal.
 
