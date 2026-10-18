@@ -241,3 +241,36 @@ notification can't say "Applied 2 on local, then x.js failed" without running `s
 `cause` and `location`). Additive.
 
 **Done when:** a CLI test of a failing batch shows the applied files in `details.results`.
+
+---
+
+## R11 — Who holds the lock, from a command that doesn't release it · Phase 7 (optional) · `open`
+
+**Why:** the console and the pipeline sidebar (Phase 7) show when an environment's lock is held
+and by whom, so nobody starts a run that will only fail with `LOCK_ALREADY_HELD`. Today the only
+command that reads the lock, `mmk unlock`, also releases it, and `status --json` doesn't mention
+it. The extension can't read the lock collection itself (rule 1), so until this ships it shows the
+lock only when a run reports it.
+
+**Proposal:** a read-only command, `mmk lock --json`, printing `{ "holder": LockInfo | null }`
+(`LockInfo` is already exported). It never acquires or releases the lock, and connects the way R3's
+read commands do, so it works with a `read`-role user. The extension adds it to the read-only
+commands in `assertCanRun`.
+
+**Done when:** the command exists, a test shows it changes nothing (lock held and free), the
+`--json` output has a shape test, and it's documented with `unlock`.
+
+---
+
+## R12 — The batch a run would record, in `dry-run` · Phase 7 (optional) · `open`
+
+**Why:** the console's plan (C6) says what a run will be recorded as, so that the result and
+*Roll back batch N* match what the user approved. `dry-run up --json` returns the pending rows
+with `batch: null`, and the extension mustn't work out the next number itself (rule 1: batches
+are mmk's).
+
+**Proposal:** an optional `plannedBatch?: number` on each row `dry-run up` would apply: the batch
+`up` would record now. Additive: `batch` keeps meaning "the batch it ran in", and stays `null`.
+
+**Done when:** `dry-run up --json` rows carry `plannedBatch`, with a shape test, and the docs for
+`dry-run` mention it.

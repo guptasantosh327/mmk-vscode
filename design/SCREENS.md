@@ -138,6 +138,35 @@ In the matrix webview, use `--vscode-*` CSS variables (e.g. `--vscode-charts-gre
 
 ---
 
+## Flow D — Migration console and pipeline sidebar (Phase 7)
+
+**Mockups:** <https://claude.ai/artifact/HkfYg1uFrqRcdXYekFnXSg> (private to the owner). Page
+**C · Flows** has the flow map and C1–C13; frame **B** on page **Directions** is the pipeline
+sidebar. The custom looks on page **C · Styles** were turned down: the console uses VS Code's theme
+colours, as C1–C13 do. The frames were drawn in Dark Modern; in any other theme the same layout
+takes that theme's colours.
+
+- **C1 Overview:** header (project, files from), environment tabs with pending counts, filters
+  (*All*, *Pending*, *Needs attention*, *Only differences*), files from *branch* or *origin/main*,
+  the migrations × environments table, the selected migration's detail (its record on each
+  environment, actions for the selected one, the CLI command), and the selected environment's
+  batches.
+- **C2** an applied migration (*Run down…*, *Redo…*, *Roll back batch N…*); **C3** a read-only
+  environment (a notice, *Plan* and the command to copy only); **C4** *Only differences* with
+  notes, files from `origin/main`.
+- **C5** new migration · **C6** plan · **C7** running (mmk's own output, no Stop) · **C8** result ·
+  **C9** confirm rolling back a batch.
+- **C10** the diff against the version that ran · **C11** lock held (from a run's
+  `LOCK_ALREADY_HELD`; R11 shows it before a run) · **C12** can't connect (mmk's error as is) ·
+  **C13** add environment.
+- **Build it as:** a `WebviewPanel` (the matrix's, grown), strict CSP, data over `postMessage`,
+  every action through the existing commands. The pipeline sidebar is a `WebviewView` above the
+  tree. Colours: `--vscode-*` only (pending `charts-blue`, applied `testing-iconPassed`, edited
+  `editorWarning-foreground`, selection `list-activeSelectionBackground`, borders
+  `panel-border`), icons from codicons.
+
+---
+
 ## Screens not drawn yet (build from these notes)
 
 - **Add environment** (Phase 3): name → masked connection-string input → database (pre-filled from

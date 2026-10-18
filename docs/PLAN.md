@@ -1,6 +1,6 @@
 # Plan — Mongo Migrate Kit for VS Code
 
-Six phases. **Each phase ends when its exit criteria pass**: lint, typecheck, unit, contract and
+Seven phases. **Each phase ends when its exit criteria pass**: lint, typecheck, unit, contract and
 integration tests are green. At that point, say `PHASE N COMPLETE`, update `CLAUDE.md` §0, and wait
 for the go-ahead. Don't start the next phase early. This is the same discipline as mongo-migrate-kit's
 own build.
@@ -17,6 +17,7 @@ ID from `docs/MMK-REQUESTS.md`. A phase can't finish until its requests are **re
 | 4 | Applied-file protection | B1, B2 | R5 |
 | 5 | ~~Rollback tests + lint~~ dropped | ~~A4~~ | ~~R6, R7~~ |
 | 6 | Stable 1.0 release | — | R8 |
+| 7 | Migration console + pipeline sidebar | C1–C13, B (canvas) | R11, R12 (both optional) |
 
 ---
 
@@ -312,3 +313,55 @@ Say so in the README.
 - CI runs every suite on the pinned mongo-migrate-kit and on `MIN_MMK_VERSION` (1.5.0); a contract
   test keeps the matrix and the constant in step.
 - Publishing is the owner's step: `docs/RELEASE.md` lists it, after releasing mongo-migrate-kit.
+
+---
+
+## Phase 7 — Migration console and pipeline sidebar
+
+**Goal:** one place to see every migration on every environment and act on it, plus the
+environments as a pipeline in the sidebar. Design: the canvas
+<https://claude.ai/artifact/HkfYg1uFrqRcdXYekFnXSg>, page **C · Flows** (C1–C13 and the flow map)
+and frame **B** on page **Directions**. Drawn in VS Code's theme colours only: the owner chose
+them over the custom looks on page **C · Styles** (2026-10-18). `design/SCREENS.md` has the notes.
+
+**Needs from mmk:** nothing that isn't released. Optional: **R11** (who holds the lock, from a
+command that doesn't release it) and **R12** (the batch a run would record, in `dry-run`). Until
+they're released, the console shows the lock only when a run reports `LOCK_ALREADY_HELD`, and the
+plan says "as one new batch" without a number.
+
+**Tasks**
+1. **Console (C1–C4):** the environments matrix grows into the migration console, one editor tab
+   per project. "mmk: Open migration console" opens it; "Compare all environments" opens it with
+   *Only differences*. It has the project and branch, environment tabs (picking one selects it for
+   every command, as the status bar does), filters (*All*, *Pending*, *Needs attention*, *Only
+   differences*), files from your branch or `origin/main` (as in Phase 3), the migrations ×
+   environments table (`buildMatrix`), a detail panel for the selected migration (its record on
+   each environment, the actions the selected environment allows, the CLI command), and the
+   selected environment's batches (`buildStatusModel`).
+2. **Actions** run the existing commands with `{ dir, file }`: up, down, redo, dry run, copy CLI
+   command, show applied version, create. The read-only rule, the confirmations and the results
+   stay where they are.
+3. **Roll back a batch (C9):** `mmk down --batch N --json` (mmk 1.5 has it), after a modal that
+   names every file in the batch. A new command, `mmk.downBatch`, with a contract test for its JSON.
+4. **Plan, running, result (C6–C8)** inside the console: the plan is `dry-run up`'s rows; *Apply*
+   runs `up`; while it runs, mmk's own output streams into the panel (no Stop: halting a migration
+   midway could leave data half-changed); the result lists each `RunResult`, and on a failure
+   shows mmk's error as is, with what ran before it from R10's `details.results` (on 1.5, from a
+   status read).
+5. **When something needs you (C10–C12):** an edited file links to *Show applied version* (R5);
+   `LOCK_ALREADY_HELD` shows mmk's message and *Release the lock…* (the existing unlock); an
+   environment that can't be read shows mmk's error as is, with *Try again*, *Edit connection* and
+   *Show output*. *Add environment* (C13) stays the existing command.
+6. **Pipeline sidebar (B):** a webview view at the top of the mmk container: each environment as a
+   step (pending count, read-only, the latest migration applied, the lock once R11 is released),
+   the selected environment's pending migrations, and *Review N pending on <env>*, which opens the
+   console's plan. The tree stays below it for keyboard users.
+7. **Theme:** only `--vscode-*` variables and codicons, nothing hard-coded (CLAUDE.md §4 and §8).
+
+**Tests:** unit tests for the console model (filters, the detail for each state and environment,
+which actions are offered, history); a contract test for `down --batch`; integration tests that
+open the console, select a migration, run up from it, offer no write action on a read-only
+environment, and need the modal before rolling back a batch.
+
+**Exit criteria:** from the console alone, plan and apply local's pending migrations, roll back a
+batch and compare every environment, with nothing written to a read-only environment.
