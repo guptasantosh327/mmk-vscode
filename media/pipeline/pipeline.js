@@ -70,6 +70,12 @@
                 el('span', { text: item.note }),
               ])
             : null,
+          item.lock
+            ? el('span', { class: 'small line note warning', title: item.lock.expires || null }, [
+                icon('watch'),
+                el('span', { text: item.lock.summary }),
+              ])
+            : null,
         ],
       ),
       el(

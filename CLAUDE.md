@@ -19,8 +19,10 @@
   stay `mmk`, the CLI's name. **Release order (owner, 2026-10-18):** mongo-migrate-kit 1.6.0
   first, then pin it here (`docs/RELEASE.md` step 2), then publish 1.1.0, then fix mmk's docs
   page about the extension (R8 follow-up, step 4). The extension still supports 1.5.0: there the
-  applied-file warning and read-only database users stay off. Optional mmk requests R11 and R12
-  are open, not built. Phase 5 (rollback tests, lint) was built and then dropped.
+  applied-file warning, read-only database users and the lock UI stay off. **R11** (`mmk lock`)
+  is built on MMK_REPO branch `feat/lock-command` for 1.6.0 (owner held the release for it,
+  2026-10-19), with the extension's lock UI on `feat/console`. R12 is open, not built. Phase 5
+  (rollback tests, lint) was built and then dropped.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
   branches into mmk's `main` in a throwaway clone, stamp it with the next version plus `-dev.0`,
   `npm pack`, then `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
@@ -32,7 +34,8 @@
   that matrix and the constant in step.
 - **MMK requests released:** R2, R3, R5, R8, R9 and R10 in mongo-migrate-kit 1.6.0 (PRs
   #11–#15; the owner publishes it, 2026-10-18). R8's page is live but still names the old
-  extension: fix it after 1.1.0 ships. R4 (optional) isn't built. **R6 and R7 were dropped**
+  extension: fix it after 1.1.0 ships. R11 is built for 1.6.0 on `feat/lock-command`, waiting to
+  be merged. R4 (optional) isn't built. **R6 and R7 were dropped**
   (owner, 2026-10-18): their branches `feat/test-rollback` and `feat/lint` stay unmerged, and
   Phase 5 (rollback tests, lint) isn't in the extension.
 - **Extension ID:** `guptasantosh327.mongo-migrate-kit` (`publisher`.`name`). The publisher exists
@@ -215,6 +218,7 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
 │   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
 │   │   ├── console.ts           # the migration console's model, plan and result (Phase 7)
 │   │   ├── pipeline.ts          # the environments pipeline's model (Phase 7, design B)
+│   │   ├── lock-holder.ts       # who holds an environment's lock (mmk lock, R11), worded for the views
 │   │   └── redact.ts            # mask credentials in anything logged
 │   ├── git/                     # NO vscode imports
 │   │   ├── git.ts               # runGit (execFile, bytes out)
@@ -270,7 +274,7 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
   They're never written to settings.json or logs. If settings.json contains `mongodb://user:pass@`,
   warn and offer to move it to the keychain.
 - **Read-only environments** (staging and prod by default) only ever run read commands: `status`,
-  `list`, `dry-run`, `status --all-namespaces`. Write commands are only offered on environments
+  `list`, `dry-run`, `status --all-namespaces`, `lock`. Write commands are only offered on environments
   marked writable (by default only `local`).
 
 ---

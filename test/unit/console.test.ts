@@ -363,6 +363,35 @@ describe('buildConsole notices', () => {
     ]);
   });
 
+  const HELD = {
+    holder: 'ci on deploy-runner-7 (pid 4242)',
+    summary: 'Locked by ci on deploy-runner-7 (pid 4242) since 11:40',
+    expires: 'If that run crashed, the lock frees itself at 11:41',
+  };
+
+  it('should say who holds the lock on a writable environment, and offer to release it', () => {
+    const model = buildConsole(input({ locks: { local: HELD } }));
+
+    expect(model.notice).toEqual({
+      kind: 'locked',
+      text: "Locked by ci on deploy-runner-7 (pid 4242) since 11:40. Until it's released, a run on local fails with LOCK_ALREADY_HELD. If that run crashed, the lock frees itself at 11:41.",
+      actions: ['unlock', 'retry'],
+    });
+    expect(model.tabs.map((tab) => [tab.name, tab.lock])).toEqual([
+      ['local', HELD.summary],
+      ['staging', ''],
+      ['prod', ''],
+    ]);
+  });
+
+  it('should say a run is in progress on a read-only environment, without offering to release it', () => {
+    expect(buildConsole(input({ selected: 'prod', locks: { prod: HELD } })).notice).toEqual({
+      kind: 'locked',
+      text: 'Locked by ci on deploy-runner-7 (pid 4242) since 11:40: a run is in progress on prod. If that run crashed, the lock frees itself at 11:41.',
+      actions: ['retry'],
+    });
+  });
+
   it('should offer to set up an environment this project has no connection for', () => {
     expect(buildConsole(unreadable(PROD, 'not-set-up')).notice).toMatchObject({
       kind: 'not-set-up',

@@ -225,13 +225,17 @@ describe('connectionEnv', () => {
 describe('read-only enforcement', () => {
   const staging = { name: 'staging', readOnly: true, color: 'warning', local: false } as const;
 
-  it.each([['status'], ['list', '--pending'], ['dry-run', 'up'], ['config'], ['create', 'x']])(
-    'should allow %j',
-    (...args) => {
-      expect(isReadCommand(args)).toBe(true);
-      expect(() => assertCanRun(staging, args)).not.toThrow();
-    },
-  );
+  it.each([
+    ['status'],
+    ['list', '--pending'],
+    ['dry-run', 'up'],
+    ['lock'],
+    ['config'],
+    ['create', 'x'],
+  ])('should allow %j', (...args) => {
+    expect(isReadCommand(args)).toBe(true);
+    expect(() => assertCanRun(staging, args)).not.toThrow();
+  });
 
   it.each([
     ['up'],

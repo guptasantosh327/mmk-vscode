@@ -1,6 +1,7 @@
 import type { RunResult } from 'mongo-migrate-kit';
 import type { Wire, WireStatusRow } from './contract.js';
 import { type Environment, type EnvironmentHue, environmentHue } from './environments.js';
+import type { HeldLock } from './lock-holder.js';
 import type { CellState, MatrixColumn, MatrixModel, MatrixRow } from './matrix.js';
 import { buildStatusModel, formatDuration, formatWhen } from './model.js';
 import { displayName } from './naming.js';
@@ -103,6 +104,8 @@ export interface ConsoleInput {
   rows: Readonly<Record<string, readonly WireStatusRow[] | null>>;
   /** False when the files compared are a ref's copy: nothing runs on those */
   filesAreLocal: boolean;
+  /** Each environment's lock (`environmentLocks`), by name */
+  locks?: Readonly<Record<string, HeldLock | null>>;
   now?: Date;
 }
 
@@ -116,6 +119,8 @@ export interface ConsoleTab {
   state: MatrixColumn['state'];
   pending: number;
   attention: number;
+  /** `Locked by …` when another run holds its migration lock, else empty */
+  lock: string;
 }
 
 /** One filter chip */
@@ -189,11 +194,11 @@ export interface ConsoleBatch {
 }
 
 /** What a notice's buttons do */
-export type NoticeAction = 'review' | 'retry' | 'editEnvironment' | 'showOutput';
+export type NoticeAction = 'review' | 'retry' | 'editEnvironment' | 'showOutput' | 'unlock';
 
 /** A line above the table when something needs saying */
 export interface ConsoleNotice {
-  kind: 'edited' | 'read-only' | 'unreadable' | 'not-set-up';
+  kind: 'edited' | 'read-only' | 'unreadable' | 'not-set-up' | 'locked';
   text: string;
   /** mmk's own message, shown as is (`unreadable`) */
   detail?: string;
@@ -276,6 +281,7 @@ export function buildConsole(input: ConsoleInput): ConsoleModel {
       attention: input.matrix.rows.filter((row) =>
         ATTENTION_KINDS.has(kindOn(row, environment.name)),
       ).length,
+      lock: input.locks?.[environment.name]?.summary ?? '',
     };
   });
 
@@ -303,7 +309,7 @@ export function buildConsole(input: ConsoleInput): ConsoleModel {
     batches: batchesOn(input.rows[name] ?? null, picked?.file ?? null, now),
     pending,
     readOnly,
-    notice: noticeFor(input.matrix, name, readOnly, kindOn),
+    notice: noticeFor(input.matrix, name, readOnly, kindOn, input.locks?.[name] ?? null),
   };
 }
 
@@ -542,6 +548,7 @@ function noticeFor(
   environment: string,
   readOnly: boolean,
   kindOn: (row: MatrixRow, environment: string) => CellState['kind'],
+  lock: HeldLock | null,
 ): ConsoleNotice | null {
   const column = matrix.columns.find((candidate) => candidate.name === environment);
   if (column?.state === 'error') {
@@ -557,6 +564,16 @@ function noticeFor(
       kind: 'not-set-up',
       text: `${environment} isn't set up for this project: it has no connection string in your keychain yet.`,
       actions: ['editEnvironment'],
+    };
+  }
+  if (lock) {
+    const expires = lock.expires ? ` ${lock.expires}.` : '';
+    return {
+      kind: 'locked',
+      text: readOnly
+        ? `${lock.summary}: a run is in progress on ${environment}.${expires}`
+        : `${lock.summary}. Until it's released, a run on ${environment} fails with LOCK_ALREADY_HELD.${expires}`,
+      actions: readOnly ? ['retry'] : ['unlock', 'retry'],
     };
   }
   if (readOnly) {

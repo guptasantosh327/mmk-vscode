@@ -54,6 +54,11 @@ whatever it shows, `npx mmk` says the same in a terminal.
   back the batch, or release a held lock.
 - **Roll back a batch** (`mmk: Roll back a batch…`, or from the console): the confirmation names
   every migration in it.
+- **Who holds the migration lock:** when another run holds an environment's lock, its pipeline
+  card, the console, the tree and the status bar say who (user, host and process), since when, and
+  when it frees itself if that run crashed. That's before you start a run that would fail, not
+  after. *Release the lock…* asks first, and only writable environments offer it. Needs
+  mongo-migrate-kit 1.6.0 or later.
 - **Nothing runs on its own.** Every run is a click; rolling back, redoing and releasing the lock
   ask first. *Copy CLI command* gives you the same command for a terminal.
 
@@ -116,7 +121,8 @@ work too: the extension runs next to your project.
 
 It needs **mongo-migrate-kit 1.5.0 or later**; with an older one it asks you to update
 (`npm install --save-dev mongo-migrate-kit@latest`). **1.6.0 or later** adds the warning on edits
-to migrations that already ran and read-only database users; on 1.5 those two stay off.
+to migrations that already ran, read-only database users and who holds the lock; on 1.5 those
+stay off.
 
 ## Settings
 

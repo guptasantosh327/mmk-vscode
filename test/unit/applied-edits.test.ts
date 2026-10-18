@@ -56,7 +56,15 @@ function project(rows: Record<string, WireStatusRow[]>): ProjectSnapshot {
   const environments = Object.fromEntries(
     Object.entries(rows).map(([name, list]) => [
       name,
-      { rows: list, error: null, loading: false, connected: true, database: null, readAt: null },
+      {
+        rows: list,
+        error: null,
+        loading: false,
+        connected: true,
+        database: null,
+        readAt: null,
+        lock: null,
+      },
     ]),
   );
   return {

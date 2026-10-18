@@ -62,6 +62,18 @@ export interface UnlockResult {
   holder: Wire<LockInfo> | null;
 }
 
+/**
+ * `mmk lock --json` (request R11, mongo-migrate-kit 1.6): who holds the migration lock, and
+ * whether mmk judges it stale (the holder stopped renewing it, so the next run takes it over).
+ * 1.6 exports this as `LockStatus`; it's declared here until 1.6.0 is pinned (docs/RELEASE.md,
+ * step 2), and then becomes `Wire<LockStatus>`.
+ */
+export interface WireLockStatus {
+  /** The holder recorded on the lock, or null when no lock is held */
+  holder: Wire<LockInfo> | null;
+  stale: boolean;
+}
+
 /** Thrown when mmk's JSON doesn't have a field the extension reads, or it has the wrong type */
 export class ContractError extends Error {
   readonly command: string;
@@ -114,6 +126,19 @@ export function parseUnlockResult(value: unknown): UnlockResult {
       ? null
       : checkFields<Wire<LockInfo>>('unlock', 'holder', result.holder, LOCK_INFO_RULES);
   return { released: result.released, holder };
+}
+
+/** Parse the output of `mmk lock --json` */
+export function parseLockStatus(value: unknown): WireLockStatus {
+  const result = checkFields<{ holder: unknown; stale: boolean }>('lock', 'the output', value, {
+    holder: required(() => true, 'an object or null'),
+    stale: required(isBoolean, 'true or false'),
+  });
+  const holder =
+    result.holder === null
+      ? null
+      : checkFields<Wire<LockInfo>>('lock', 'holder', result.holder, LOCK_INFO_RULES);
+  return { holder, stale: result.stale };
 }
 
 /**

@@ -171,6 +171,34 @@ describe('buildPipeline', () => {
   });
 });
 
+describe('buildPipeline locks', () => {
+  const HELD = {
+    holder: 'ci on deploy-runner-7 (pid 4242)',
+    summary: 'Locked by ci on deploy-runner-7 (pid 4242) since 11:40',
+    expires: 'If that run crashed, the lock frees itself at 11:41',
+  };
+
+  it("should name another run's lock on its step, and only there", () => {
+    const steps = buildPipeline(INPUTS, 'local', NOW, { staging: HELD, prod: null }).steps;
+
+    expect(steps.map((step) => [step.name, step.lock])).toEqual([
+      ['local', null],
+      ['staging', HELD],
+      ['prod', null],
+    ]);
+  });
+
+  it("should leave the lock off a step it couldn't read", () => {
+    const inputs = INPUTS.map((input) =>
+      input.environment === STAGING
+        ? { ...input, rows: null, state: 'error' as const, message: 'boom' }
+        : input,
+    );
+
+    expect(buildPipeline(inputs, 'local', NOW, { staging: HELD }).steps[1]?.lock).toBeNull();
+  });
+});
+
 describe('isPipelineMessage', () => {
   it('should accept what the pipeline sends, and nothing else', () => {
     for (const message of [

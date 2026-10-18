@@ -4,7 +4,7 @@ import { hostname, userInfo } from 'node:os';
 import path from 'node:path';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MmkCommandError, runMmkVersion } from '../../src/mmk/cli.js';
+import { MmkCommandError, isUnknownCommand, runMmkVersion } from '../../src/mmk/cli.js';
 import {
   MIN_MMK_VERSION,
   checkCompat,
@@ -13,6 +13,7 @@ import {
 } from '../../src/mmk/compat.js';
 import {
   parseCreateResult,
+  parseLockStatus,
   parseRunResults,
   parseStatusRows,
   parseUnlockResult,
@@ -400,6 +401,66 @@ describe('down --batch, for rolling back a batch (Phase 7)', () => {
 
     expect(error.failure.code).toBe('INVALID_ARGUMENT');
     expect(error.failure.message).toMatch(/No applied migrations found in batch 9/);
+  });
+});
+
+describe('lock, for showing who holds the migration lock (R11)', () => {
+  const project = withProject('contract_lock');
+
+  it.runIf(hasNextMmk())(
+    'lock --json: no holder when nothing runs, and changes nothing',
+    async () => {
+      expect(parseLockStatus((await project().run(['lock'])).value)).toEqual({
+        holder: null,
+        stale: false,
+      });
+    },
+  );
+
+  it.runIf(hasNextMmk())(
+    'lock --json: the holder while a run is in progress',
+    async () => {
+      project().addMigration(
+        '20991231000000-slow.js',
+        `module.exports = {
+  async up() {
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+  },
+  async down() {},
+};
+`,
+      );
+      const running = project().run(['up', '20991231000000-slow.js']);
+      let status = parseLockStatus((await project().run(['lock'])).value);
+      for (let tries = 0; status.holder === null && tries < 40; tries += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        status = parseLockStatus((await project().run(['lock'])).value);
+      }
+
+      expect(status.stale).toBe(false);
+      expect(status.holder).toEqual({
+        lockedAt: expect.any(String),
+        pid: expect.any(Number),
+        host: hostname(),
+        executedBy: userInfo().username,
+        acquiredAt: expect.any(String),
+        expiresAt: expect.any(String),
+      });
+      await running;
+      expect(parseLockStatus((await project().run(['lock'])).value).holder).toBeNull();
+    },
+    30_000,
+  );
+
+  it.runIf(!hasNextMmk())('1.5: has no lock command, which the store recognizes', async () => {
+    const error = await project()
+      .run(['lock'])
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+
+    expect(isUnknownCommand(error, 'lock')).toBe(true);
   });
 });
 

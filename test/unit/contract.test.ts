@@ -3,6 +3,7 @@ import {
   ContractError,
   parseCreateResult,
   parseErrorDocument,
+  parseLockStatus,
   parseRunResults,
   parseStatusRows,
   parseUnlockResult,
@@ -171,6 +172,32 @@ describe('parseUnlockResult', () => {
         holder: { lockedAt: '2026-10-16T10:31:00.000Z', host: 'h', executedBy: 'u' },
       }),
     ).toThrow('holder.pid should be a number, but it is missing');
+  });
+});
+
+describe('parseLockStatus', () => {
+  const holder = {
+    lockedAt: '2026-10-16T10:31:30.000Z',
+    pid: 4242,
+    host: 'deploy-runner-7',
+    executedBy: 'ci',
+    acquiredAt: '2026-10-16T10:31:00.000Z',
+    expiresAt: '2026-10-16T10:32:30.000Z',
+  };
+
+  it('should accept no lock, a held one and a stale one', () => {
+    expect(parseLockStatus({ holder: null, stale: false })).toEqual({ holder: null, stale: false });
+    expect(parseLockStatus({ holder, stale: false })).toEqual({ holder, stale: false });
+    expect(parseLockStatus({ holder, stale: true })).toEqual({ holder, stale: true });
+  });
+
+  it('should refuse output without stale, or a holder without a pid', () => {
+    expect(() => parseLockStatus({ holder: null })).toThrow(
+      'stale should be true or false, but it is missing',
+    );
+    expect(() => parseLockStatus({ holder: { ...holder, pid: undefined }, stale: false })).toThrow(
+      'holder.pid should be a number, but it is missing',
+    );
   });
 });
 

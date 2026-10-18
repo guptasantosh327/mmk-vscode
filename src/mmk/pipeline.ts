@@ -1,5 +1,6 @@
 import type { WireStatusRow } from './contract.js';
 import { type EnvironmentHue, environmentHue } from './environments.js';
+import type { HeldLock } from './lock-holder.js';
 import type { CellState, MatrixInput, MatrixModel } from './matrix.js';
 import { buildMatrix } from './matrix.js';
 import { formatDay, formatWhen } from './model.js';
@@ -26,6 +27,8 @@ export interface PipelineStep {
   /** What needs saying: mmk's error as is, "not set up", or what needs attention */
   note: string;
   tone: 'none' | 'warning' | 'error';
+  /** Another run's migration lock on it, when mmk reports one in force */
+  lock: HeldLock | null;
 }
 
 /** One pending migration on the selected environment */
@@ -62,6 +65,8 @@ export function buildPipeline(
   inputs: readonly MatrixInput[],
   selected: string,
   now: Date = new Date(),
+  /** Each environment's lock (`environmentLocks`), by name */
+  locks: Readonly<Record<string, HeldLock | null>> = {},
 ): PipelineModel {
   const matrix: MatrixModel = buildMatrix(inputs);
   const kindOn = (file: string, environment: string): CellState['kind'] =>
@@ -93,6 +98,7 @@ export function buildPipeline(
       database: input.database,
       pending,
       attention: attention.length,
+      lock: input.state === 'ok' ? (locks[name] ?? null) : null,
     };
     if (input.state === 'error') {
       return { ...base, latest: '', note: input.message ?? `Couldn't read ${name}`, tone: 'error' };

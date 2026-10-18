@@ -21,6 +21,7 @@ import {
 import { parseStatusRows } from '../../mmk/contract.js';
 import type { WireStatusRow } from '../../mmk/contract.js';
 import type { Environment } from '../../mmk/environments.js';
+import { environmentLocks } from '../../mmk/lock-holder.js';
 import { type MatrixInput, buildMatrix, matrixInputs } from '../../mmk/matrix.js';
 import type { FinishedRun, ProjectSnapshot } from '../../mmk/store.js';
 
@@ -582,6 +583,7 @@ export class ConsolePanel implements vscode.Disposable {
       picked: this.picked,
       rows: Object.fromEntries(inputs.map((input) => [input.environment.name, input.rows])),
       filesAreLocal: this.source.kind === 'branch',
+      locks: environmentLocks(project, environments),
     });
     const readAt = environments
       .map((environment) => project?.environments[environment.name]?.readAt)

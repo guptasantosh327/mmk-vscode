@@ -287,7 +287,7 @@ export function connectionEnv(connection: Connection | null): Record<string, str
  * The mmk commands that never write to a database, so they may run on a read-only environment.
  * `create` only writes a file.
  */
-const NO_DATABASE_WRITES = new Set(['status', 'list', 'dry-run', 'config', 'create']);
+const NO_DATABASE_WRITES = new Set(['status', 'list', 'dry-run', 'lock', 'config', 'create']);
 
 /** True when `args` is an mmk command that never writes to a database */
 export function isReadCommand(args: readonly string[]): boolean {

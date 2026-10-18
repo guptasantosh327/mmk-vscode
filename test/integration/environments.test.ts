@@ -494,6 +494,68 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     renameSync(path.join(workspaceDir, '.git'), path.join(workspaceDir, '.git-done'));
   });
 
+  test("names another run's lock in the pipeline, the console and the tree, then releases it", async function () {
+    await vscode.commands.executeCommand('mmk.selectEnvironment', 'local');
+    // Another run holding the lock on local, as mmk records it (its own tests do the same).
+    const locks = client.db('mmk_local').collection<{
+      _id: string;
+      [field: string]: unknown;
+    }>('_mmk_locks');
+    const now = Date.now();
+    await locks.insertOne({
+      _id: 'mmk_lock',
+      lockedAt: new Date(now),
+      acquiredAt: new Date(now),
+      expiresAt: new Date(now + 600_000),
+      pid: 4242,
+      host: 'deploy-runner-7',
+      executedBy: 'ci',
+      owner: 'another-run',
+    });
+    try {
+      await vscode.commands.executeCommand('mmk.refresh');
+      await api.idle();
+      const step = (): { lock: { summary: string } | null } | undefined =>
+        api.pipeline
+          .view()
+          .projects[0]?.model.steps.find((candidate) => candidate.name === 'local');
+      if (!api.store.snapshot(workspaceDir)?.environments.local?.lock) {
+        // mmk before R11 has no `lock` command, so nothing names the lock.
+        assert.equal(step()?.lock, null);
+        this.skip();
+      }
+
+      assert.match(
+        step()?.lock?.summary ?? '',
+        /^Locked by ci on deploy-runner-7 \(pid 4242\) since \d\d:\d\d$/,
+      );
+      assert.ok(
+        api.sidebar().some((line) => line.includes('Locked by ci on deploy-runner-7')),
+        'The tree should name the holder',
+      );
+      const panel = await vscode.commands.executeCommand<ConsolePanel>('mmk.openConsole', {
+        dir: workspaceDir,
+      });
+      assert.ok(panel, 'The console should open');
+      const notice = panel.view().model.notice;
+      assert.equal(notice?.kind, 'locked');
+      assert.deepEqual(notice?.actions, ['unlock', 'retry']);
+
+      api.setConfirm(() => true);
+      await panel.receive({ type: 'unlock' });
+      await api.idle();
+      assert.deepEqual(api.store.snapshot(workspaceDir)?.environments.local?.lock, {
+        holder: null,
+        stale: false,
+      });
+      assert.notEqual(panel.view().model.notice?.kind, 'locked');
+      assert.equal(step()?.lock, null);
+      panel.dispose();
+    } finally {
+      await locks.deleteMany({});
+    }
+  });
+
   test('removes staging and its stored connection', async () => {
     api.setConfirm(() => true);
     assert.equal(await vscode.commands.executeCommand('mmk.removeEnvironment', 'staging'), true);

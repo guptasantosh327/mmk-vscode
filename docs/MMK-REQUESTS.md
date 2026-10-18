@@ -6,7 +6,7 @@ the need goes here. Each request is **designed and built in MMK_REPO**
 that repo's CLAUDE.md, with its own tests, changelog entry and release.
 
 **Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Released in 1.6.0: R2, R3, R5,
-R8, R9 and R10. Once a request is released,
+R8, R9 and R10; R11 is built for 1.6.0 too, waiting to be merged. Once a request is released,
 raise `MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
 
 **Developing against the unreleased requests:** each one is on its own branch in MMK_REPO. To
@@ -247,7 +247,17 @@ notification can't say "Applied 2 on local, then x.js failed" without running `s
 
 ---
 
-## R11 — Who holds the lock, from a command that doesn't release it · Phase 7 (optional) · `open`
+## R11 — Who holds the lock, from a command that doesn't release it · Phase 7 · `in progress`
+
+**Status:** built on mongo-migrate-kit branch `feat/lock-command` (commit `8603662`, not pushed,
+not merged) as `mmk lock [--json]`, `MigratorKit.lockStatus()` and the exported `LockStatus`
+type, with tests (lock free, held, stale, a pre-1.5 holder; nothing written; a `read`-role user)
+and docs (`/commands/lock`). The owner holds 1.6.0 for it (2026-10-19), so it ships in 1.6.0. One
+change from the proposal: the output also has `stale`, mmk's verdict on the server's clock, by the
+same filter a run uses to take the lock over, so the extension never judges staleness itself
+(rule 1). The extension reads it in `MmkStore` (`readLock`), shows a lock in force in the
+pipeline, the console, the tree and the status bar, and offers *Release the lock…* on writable
+environments. On an mmk without the command it asks once and stops (`isUnknownCommand`).
 
 **Why:** the console and the pipeline sidebar (Phase 7) show when an environment's lock is held
 and by whom, so nobody starts a run that will only fail with `LOCK_ALREADY_HELD`. Today the only

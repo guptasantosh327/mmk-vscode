@@ -104,6 +104,7 @@
         [
           el('span', { class: 'env-icon' }, [icon(tab.readOnly ? 'lock' : 'circle-filled')]),
           el('span', { text: tab.name }),
+          tab.lock ? el('span', { class: 'tab-lock', title: tab.lock }, [icon('watch')]) : null,
           tab.state === 'error' ? icon('error') : null,
           tab.state === 'not-set-up' ? icon('key') : null,
           tab.state === 'ok'
@@ -176,6 +177,7 @@
     'read-only': 'lock',
     unreadable: 'error',
     'not-set-up': 'key',
+    locked: 'watch',
   };
 
   function notice() {
@@ -189,6 +191,7 @@
           send({ type: 'editEnvironment' }),
         ),
       showOutput: () => button('Show output', 'output', () => send({ type: 'showOutput' })),
+      unlock: () => button('Release the lock…', 'unlock', () => send({ type: 'unlock' })),
     };
     return el('div', { class: `notice ${item.kind}`, role: 'status' }, [
       el('div', { class: 'notice-line' }, [

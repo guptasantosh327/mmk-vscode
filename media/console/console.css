@@ -246,12 +246,15 @@ button.link:hover {
   flex: 1 1 100%;
 }
 
-.notice.edited {
+.notice.edited,
+.notice.locked {
   border-color: var(--vscode-inputValidation-warningBorder);
   background: var(--vscode-inputValidation-warningBackground);
 }
 
-.notice.edited .notice-line .codicon {
+.notice.edited .notice-line .codicon,
+.notice.locked .notice-line .codicon,
+.tab-lock .codicon {
   color: var(--vscode-editorWarning-foreground);
 }
 

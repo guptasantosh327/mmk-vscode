@@ -7,14 +7,18 @@ mongo-migrate-kit 1.6.0 switches on. It still works with mongo-migrate-kit 1.5.0
 
 ## 1. mongo-migrate-kit 1.6.0 (owner, in MMK_REPO)
 
-Everything the extension asked for is in mongo-migrate-kit's `main`: R2, R3, R5, R8, R9 and R10
-(PRs #11–#15). Checked on `fdd4de3`: typecheck, lint, 622 tests, build and the docs build pass,
+R2, R3, R5, R8, R9 and R10 are in mongo-migrate-kit's `main` (PRs #11–#15); R11 is on its own
+branch (step 1). Checked on `fdd4de3`: typecheck, lint, 622 tests, build and the docs build pass,
 and so do this extension's contract and integration tests against a build of it.
 
-1. In its `CHANGELOG.md` "Unreleased": move `mmk config [--json]`, `loadConfigWithSources()` and
-   "A failed run says what ran first" from **Fixed** to **Added** (they're new), drop the blank
-   line inside **Fixed**, and call `### Docs` `### Documentation`, as older releases do.
-2. `npm run release`, picking **minor** (1.6.0). `docs/guide/vscode.md` there names 1.6.0 as the
+1. Merge two more branches into its `main` (they merge cleanly together, in either order):
+   - `fix/changelog-unreleased`: the "Unreleased" entries under the right headings;
+   - `feat/lock-command`: **R11**, `mmk lock [--json]`, which the extension's lock UI needs (the
+     owner held 1.6.0 for it, 2026-10-19). Merged with the first, all 631 tests, typecheck, lint,
+     the build and the docs build pass.
+2. Set `## Unreleased` to `## v1.6.0` (with a one-line summary, as earlier releases have) and the
+   docs site's version label (`text: 'v1.5.0'` in `docs/.vitepress/config.ts`) to `'v1.6.0'`.
+3. `npm run release`, picking **minor** (1.6.0). `docs/guide/vscode.md` there names 1.6.0 as the
    version with R3 and R5: if the release gets another number, change it first.
 
 ## 2. Pin mongo-migrate-kit 1.6.0 here (once it's on npm)
@@ -30,6 +34,7 @@ npm install --save-dev --save-exact mongo-migrate-kit@1.6.0
   - `WireStatusRow` in `src/mmk/contract.ts` becomes `Wire<StatusRow>` (R5's `checksum` is in
     `StatusRow`).
   - `ProjectConfig` becomes a `Pick` of mmk's `ConfigSummary` (R2).
+  - `WireLockStatus` becomes `Wire<LockStatus>` (R11).
 - Those compile only against 1.6's types, so in `.github/workflows/ci.yml` run the **Typecheck**
   step only on the pinned job (`if: matrix.mmk == 'pinned'`). The `1.5.0` job still lints and runs
   every test suite, which is what proves 1.5 support.

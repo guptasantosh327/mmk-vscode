@@ -56,6 +56,11 @@ On by themselves once a project has mongo-migrate-kit 1.6.0 or later:
 - The project's settings come from `mmk config --json`, so its migrations show even before it has
   a connection string.
 - When a run stops partway, the console's result lists what ran before it from mmk's own error.
+- **Who holds the migration lock** (`mmk lock`): when another run holds an environment's lock, its
+  pipeline card, the console (a notice and its tab), the tree and the status bar name the holder,
+  since when, and when the lock frees itself if that run crashed, before a run that would fail with
+  `LOCK_ALREADY_HELD`. *Release the lock…* in the console or the tree asks first, and only writable
+  environments offer it. A lock mmk reports stale isn't shown: the next run takes it over.
 
 ### Changed
 

@@ -181,6 +181,7 @@ describe('a read-only MongoDB user', () => {
     const staging = store.snapshot(dir)?.environments.staging;
 
     expect(staging?.error).toBeNull();
+    expect(staging?.lock).toEqual({ holder: null, stale: false });
     expect(staging?.rows?.map((row) => [row.file, row.status])).toEqual([
       [FIXTURE_FILES[0], 'applied'],
       [FIXTURE_FILES[1], 'pending'],
@@ -198,6 +199,7 @@ describe('a read-only MongoDB user', () => {
       const staging = store.snapshot(dir)?.environments.staging;
 
       expect(staging?.rows).toBeNull();
+      expect(staging?.lock).toBeNull();
       expect(staging?.error?.code).toBe('CONNECTION_FAILED');
       expect(staging?.error?.message).toContain('not authorized');
       expect(staging?.error?.message).not.toContain(READER.password);

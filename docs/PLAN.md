@@ -330,7 +330,8 @@ them over the custom looks on page **C · Styles** (2026-10-18). `design/SCREENS
 **Needs from mmk:** nothing that isn't released. Optional: **R11** (who holds the lock, from a
 command that doesn't release it) and **R12** (the batch a run would record, in `dry-run`). Until
 they're released, the console shows the lock only when a run reports `LOCK_ALREADY_HELD`, and the
-plan says "as one new batch" without a number.
+plan says "as one new batch" without a number. *R11 was built for mongo-migrate-kit 1.6.0 at the
+owner's request (2026-10-19); see "Lock UI" below.*
 
 **Tasks**
 1. **Console (C1–C4):** the environments matrix grows into the migration console, one editor tab
@@ -372,6 +373,17 @@ batch and compare every environment, with nothing written to a read-only environ
 **PHASE 7 COMPLETE** (2026-10-18): every exit criterion is covered by an integration test
 (plan and apply, batch rollback behind its modal, comparison, a read-only plan that writes
 nothing). R11 and R12 stay optional and open.
+
+**Lock UI** (owner, 2026-10-19: "the extension doesn't have any UI for the lock"): with R11
+(`mmk lock --json`, mongo-migrate-kit 1.6.0) the store reads each environment's lock next to its
+status (`readLock`; asked once and dropped on an mmk without the command). A lock in force shows
+on the environment's pipeline card, as a notice in the console (*Release the lock…* on writable
+environments, which runs the existing `mmk.unlock` with its modal), on the console's tab, in the
+tree (click to release, writable only) and in the status bar (`$(watch) … · locked`). A lock mmk
+reports stale isn't shown: the next run takes it over. The project's own run is never shown as a
+lock. Icon: `watch`, since `lock` already means read-only. Tests: unit (parser, wording, models,
+store), contract (`lock --json` while a slow run holds the lock; 1.5's unknown command), and an
+integration test that shows another run's lock everywhere and releases it from the console.
 
 *Built as:*
 - **Task 1 and 2 (C1–C4):** `src/mmk/console.ts` builds the console from `buildMatrix` and

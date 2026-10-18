@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { type Deps, relativeDir } from '../commands/context.js';
+import { environmentLocks } from '../mmk/lock-holder.js';
 import { matrixInputs } from '../mmk/matrix.js';
 import {
   type PipelineMessage,
@@ -69,7 +70,12 @@ export class PipelineProvider implements vscode.WebviewViewProvider, vscode.Disp
       projects: this.deps.store.snapshots().map((project) => ({
         dir: project.dir,
         title: relativeDir(project.dir) || path.basename(project.dir),
-        model: buildPipeline(matrixInputs(project, environments), selected),
+        model: buildPipeline(
+          matrixInputs(project, environments),
+          selected,
+          new Date(),
+          environmentLocks(project, environments),
+        ),
       })),
     };
   }
