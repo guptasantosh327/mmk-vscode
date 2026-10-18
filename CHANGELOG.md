@@ -28,6 +28,10 @@ All notable changes to this extension are documented here.
   error one.
 - A run in the console stays on screen when it ends, finished or failed with mmk's error, until
   you close it.
+- Runs no longer pop up a notification when they succeed (up, down, redo, *Apply all*, rolling
+  back a batch), and their progress shows in the status bar: the sidebar, run links and status bar
+  already show the result. A failure still shows mmk's message, and a run that did nothing says
+  why.
 - Fixed: *Edit environment → Make read-only* (or *Allow runs*) no longer drops the environment's
   colour from settings.
 - An environment that can't be read shows mmk's message as is, with *Try again*, *Edit

@@ -57,8 +57,9 @@ In the matrix webview, use `--vscode-*` CSS variables (e.g. `--vscode-charts-gre
 - **Build it as:** a `TreeDataProvider` with view-title actions; a `CodeLensProvider`; a `StatusBarItem`.
 
 ### A3 · Applied on local (Phase 2) — `VSRun.dc.html`
-- **Notification:** "Applied on local in 412 ms", detail "add-refunds-collection.js · batch 18 ·
-  transaction committed", buttons **Test rollback** (dropped with Phase 5: not built) and **Run down**.
+- **Notification:** dropped (owner, 2026-10-18). The mockup had "Applied on local in 412 ms" with
+  **Run down**; the run links, sidebar and status bar below already show the result and offer the
+  next step. Only a failure (mmk's message as is) or a run that did nothing gets one.
 - **Run links after:** `✓ Applied on local · batch 18 · 412 ms | Redo | staging: pending | prod: pending`
   above `up()`; `Run down on local` above `down()` (*Test rollback* dropped with Phase 5).
 - **Output channel "mmk":** mmk's own log lines for the run (its stderr in `--json` mode).

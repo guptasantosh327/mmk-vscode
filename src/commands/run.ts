@@ -13,7 +13,7 @@ import {
 } from '../mmk/contract.js';
 import type { Environment } from '../mmk/environments.js';
 import { formatStatusTable } from '../mmk/format.js';
-import { buildStatusModel, formatDuration, formatWhen } from '../mmk/model.js';
+import { buildStatusModel, formatWhen } from '../mmk/model.js';
 import { StoreError } from '../mmk/store.js';
 import type { ProjectSnapshot } from '../mmk/store.js';
 import {
@@ -88,20 +88,11 @@ async function runUp(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | u
   if (!output) {
     return undefined;
   }
+  // A run that applied needs no notification: the sidebar, run links and status bar show it.
+  // Only one that did nothing says why.
   const results = parseRunResults(output.value, 'up');
-  const applied = results.find((result) => result.file === ref.file && result.status === 'applied');
-  if (applied) {
-    void vscode.window
-      .showInformationMessage(
-        `Applied on ${environment.name} in ${formatDuration(applied.duration ?? 0)}: ${name} · batch ${applied.batch ?? '?'}`,
-        'Run down',
-      )
-      .then((choice) => {
-        if (choice === 'Run down') {
-          void vscode.commands.executeCommand('mmk.down', { dir: ref.project.dir, file: ref.file });
-        }
-      });
-  } else {
+  const applied = results.some((result) => result.file === ref.file && result.status === 'applied');
+  if (!applied) {
     const skipped = results.find((result) => result.file === ref.file);
     void vscode.window.showInformationMessage(
       `${name} is already applied on ${environment.name}${skipped?.reason ? ` (${skipped.reason})` : ''}, so nothing ran.`,
@@ -125,16 +116,9 @@ async function runUpAll(deps: Deps, target: unknown): Promise<Wire<RunResult>[] 
     return undefined;
   }
   const results = parseRunResults(output.value, 'up');
-  const applied = results.filter((result) => result.status === 'applied');
-  if (applied.length === 0) {
+  if (!results.some((result) => result.status === 'applied')) {
     void vscode.window.showInformationMessage(
       `Nothing to apply on ${environment.name}: it's up to date.`,
-    );
-  } else {
-    const total = applied.reduce((sum, result) => sum + (result.duration ?? 0), 0);
-    const batch = applied[0]?.batch;
-    void vscode.window.showInformationMessage(
-      `Applied ${applied.length} on ${environment.name} in ${formatDuration(total)}${batch === undefined ? '' : ` · batch ${batch}`}`,
     );
   }
   return results;
@@ -159,7 +143,7 @@ async function runDown(deps: Deps, target: unknown): Promise<Wire<RunResult>[] |
   return downOutcome(deps, ref.project, environment, ref.file, ['down', ref.file]);
 }
 
-/** Run `args` (a down) and report what it reverted */
+/** Run `args` (a down of `file`); the views show it pending again */
 async function downOutcome(
   deps: Deps,
   project: ProjectSnapshot,
@@ -167,26 +151,8 @@ async function downOutcome(
   file: string,
   args: string[],
 ): Promise<Wire<RunResult>[] | undefined> {
-  const name = shortName(file);
-  const output = await execute(deps, project, environment, args, `down ${name}`);
-  if (!output) {
-    return undefined;
-  }
-  const results = parseRunResults(output.value, 'down');
-  const reverted = results.find((result) => result.file === file && result.status === 'reverted');
-  if (reverted) {
-    void vscode.window
-      .showInformationMessage(
-        `Rolled back on ${environment.name} in ${formatDuration(reverted.duration ?? 0)}: ${name}. It's pending again.`,
-        'Run up',
-      )
-      .then((choice) => {
-        if (choice === 'Run up') {
-          void vscode.commands.executeCommand('mmk.up', { dir: project.dir, file });
-        }
-      });
-  }
-  return results;
+  const output = await execute(deps, project, environment, args, `down ${shortName(file)}`);
+  return output ? parseRunResults(output.value, 'down') : undefined;
 }
 
 /** Roll back and re-apply one migration file, after a modal confirmation */
@@ -206,22 +172,12 @@ async function runRedo(deps: Deps, target: unknown): Promise<Wire<RunResult>[] |
     return undefined;
   }
   const output = await execute(deps, ref.project, environment, ['redo', ref.file], `redo ${name}`);
-  if (!output) {
-    return undefined;
-  }
-  const results = parseRunResults(output.value, 'redo');
-  const applied = results.find((result) => result.status === 'applied');
-  if (applied) {
-    void vscode.window.showInformationMessage(
-      `Redid ${name} on ${environment.name}: rolled back, then applied in ${formatDuration(applied.duration ?? 0)} · batch ${applied.batch ?? '?'}`,
-    );
-  }
-  return results;
+  return output ? parseRunResults(output.value, 'redo') : undefined;
 }
 
 /**
  * Roll back one batch on the selected environment: the batch named by the argument
- * (`{ dir, batch }`), or one the user picks. Reports the outcome in a notification.
+ * (`{ dir, batch }`), or one the user picks. Only a failure gets a notification.
  */
 async function runDownBatch(deps: Deps, target: unknown): Promise<Wire<RunResult>[] | undefined> {
   const project = await resolveProject(deps, target);
@@ -261,11 +217,6 @@ async function runDownBatch(deps: Deps, target: unknown): Promise<Wire<RunResult
     showFailure(deps, project, environment, outcome.failure);
     return undefined;
   }
-  const reverted = outcome.results.filter((result) => result.status === 'reverted');
-  const total = reverted.reduce((sum, result) => sum + (result.duration ?? 0), 0);
-  void vscode.window.showInformationMessage(
-    `Rolled back batch ${batch} on ${environment.name}: ${reverted.length} ${reverted.length === 1 ? 'migration' : 'migrations'} in ${formatDuration(total)}. ${reverted.length === 1 ? "It's" : "They're"} pending again.`,
-  );
   return [...outcome.results];
 }
 
@@ -423,14 +374,7 @@ async function dryRun(deps: Deps, target: unknown): Promise<WireStatusRow[] | un
   if (!project) {
     return undefined;
   }
-  const output = await execute(
-    deps,
-    project,
-    environment,
-    args,
-    'dry run',
-    vscode.ProgressLocation.Window,
-  );
+  const output = await execute(deps, project, environment, args, 'dry run');
   if (!output) {
     return undefined;
   }
@@ -486,8 +430,9 @@ async function unlock(deps: Deps, target: unknown): Promise<UnlockResult | undef
 }
 
 /**
- * Run an mmk command in a project on an environment with progress, and report a failure to the
- * user. Returns mmk's output, or undefined when it failed (already reported).
+ * Run an mmk command in a project on an environment, and report a failure to the user. Progress
+ * goes in the status bar, not a notification: the sidebar and run links show "Running…" too.
+ * Returns mmk's output, or undefined when it failed (already reported).
  */
 async function execute(
   deps: Deps,
@@ -495,11 +440,10 @@ async function execute(
   environment: Environment,
   args: string[],
   label: string,
-  location: vscode.ProgressLocation = vscode.ProgressLocation.Notification,
 ): Promise<JsonOutput | undefined> {
   try {
     return await vscode.window.withProgress(
-      { location, title: `mmk: ${label} on ${environment.name}…` },
+      { location: vscode.ProgressLocation.Window, title: `mmk: ${label} on ${environment.name}…` },
       () => deps.store.run(project.dir, args, label, environment.name),
     );
   } catch (error) {

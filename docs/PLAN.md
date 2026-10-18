@@ -114,6 +114,9 @@ before a failure, for A3).
 6. **Confirmations:** `down`, `redo` and `--force` ask in a modal first. `--force` always passes `--yes`,
    because the extension confirmed already.
 7. **Results:** a notification with mmk's outcome (A3), and mmk's log in the output channel.
+   *Changed (owner, 2026-10-18):* a run that succeeds no longer gets a notification, and its
+   progress shows in the status bar instead of a notification; the views show the result.
+   Failures and runs that did nothing still get one.
 8. **Explorer badges** (`FileDecorationProvider`): `●` pending on local.
 9. **Copy CLI command** on every action.
 10. **Lock held:** show the holder from the error. Offer "Unlock…" (modal) → `mmk unlock --yes --json`.
