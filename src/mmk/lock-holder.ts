@@ -4,11 +4,21 @@ import type { ProjectSnapshot } from './store.js';
 
 /** A migration lock another run holds, worded for the views */
 export interface HeldLock {
-  /** `ci on deploy-runner-7 (pid 4242)`, plus the namespace when the holder has one */
-  holder: string;
-  /** `Locked by ci on deploy-runner-7 (pid 4242) since 10:32` */
+  /** The user who holds it: `ci` */
+  user: string;
+  /** `ci on deploy-runner-7` */
+  who: string;
+  /** `pid 4242`, plus the namespace when the holder has one */
+  process: string;
+  /** When it was taken: `10:32` */
+  since: string;
+  /** How long it has been held: `4 min` */
+  age: string;
+  /** When it frees itself if that run crashed (`10:37`), or empty when mmk didn't say */
+  frees: string;
+  /** `Locked by ci on deploy-runner-7 (pid 4242) since 10:32`, for tooltips and the tree */
   summary: string;
-  /** `If that run crashed, the lock frees itself at 10:47`, or empty when mmk didn't say */
+  /** `If that run crashed, the lock frees itself by 10:37`, or empty when mmk didn't say */
   expires: string;
 }
 
@@ -27,15 +37,39 @@ export function heldLock(
     return null;
   }
   const namespace = holder.namespace === undefined ? '' : `, namespace "${holder.namespace}"`;
-  const who = `${holder.executedBy} on ${holder.host} (pid ${holder.pid})${namespace}`;
-  const since = new Date(holder.acquiredAt ?? holder.lockedAt);
+  const who = `${holder.executedBy} on ${holder.host}`;
+  const process = `pid ${holder.pid}${namespace}`;
+  const taken = new Date(holder.acquiredAt ?? holder.lockedAt);
+  const since = formatClock(taken, now);
+  const frees = holder.expiresAt ? formatClock(new Date(holder.expiresAt), now) : '';
   return {
-    holder: who,
-    summary: `Locked by ${who} since ${formatClock(since, now)}`,
-    expires: holder.expiresAt
-      ? `If that run crashed, the lock frees itself at ${formatClock(new Date(holder.expiresAt), now)}`
-      : '',
+    user: holder.executedBy,
+    who,
+    process,
+    since,
+    age: formatAge(now.getTime() - taken.getTime()),
+    frees,
+    summary: `Locked by ${who} (${process}) since ${since}`,
+    expires: frees ? `If that run crashed, the lock frees itself by ${frees}` : '',
   };
+}
+
+/** `just now`, `4 min`, `2 h 5 min`, `3 days` */
+export function formatAge(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) {
+    return 'just now';
+  }
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const rest = minutes % 60;
+    return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 /**

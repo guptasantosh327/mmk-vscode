@@ -17,6 +17,7 @@ import {
   statusBarBackground,
 } from '../mmk/environments.js';
 import type { ProjectSnapshot } from '../mmk/store.js';
+import type { ConsolePanel } from '../views/console/panel.js';
 import { type Deps, databaseLabel, resolveProject } from './context.js';
 
 /** Arguments for "mmk: Add environment"; with all of them set, nothing is asked */
@@ -37,7 +38,7 @@ export function registerEnvironmentCommands(deps: Deps): vscode.Disposable[] {
       typeof name === 'string' ? selectByName(deps, name) : pickEnvironment(deps),
     ),
     vscode.commands.registerCommand('mmk.addEnvironment', (args?: AddArgs) =>
-      addEnvironment(deps, args ?? {}),
+      args?.name === undefined ? openAddDialog(args?.dir) : addEnvironment(deps, args),
     ),
     vscode.commands.registerCommand('mmk.editEnvironment', (name?: unknown) =>
       editEnvironment(deps, typeof name === 'string' ? name : undefined),
@@ -226,9 +227,74 @@ function environmentNote(
 }
 
 /**
- * Add an environment: name → connection string (masked) → database → test connection →
- * read-only. The connection goes to the OS keychain; settings get only the name and flags.
- * Returns the name, or undefined when cancelled.
+ * Open the console's *Add environment* dialog (C13) for a project: name, database, the
+ * connection string (masked), read-only, colour and a connection test, in one form. Returns the
+ * console, for tests.
+ */
+async function openAddDialog(dir: string | undefined): Promise<ConsolePanel | undefined> {
+  const panel = await vscode.commands.executeCommand<ConsolePanel | undefined>(
+    'mmk.openConsole',
+    dir === undefined ? undefined : { dir },
+  );
+  await panel?.receive({ type: 'addEnvironment' });
+  return panel;
+}
+
+/** Keep a new environment: its connection in the OS keychain, its name and flags in settings */
+export async function saveEnvironment(
+  deps: Deps,
+  dir: string,
+  entry: { name: string; readOnly: boolean; color?: EnvironmentHue },
+  connection: Connection,
+): Promise<void> {
+  await deps.environments.saveConnection(dir, entry.name, connection);
+  await deps.environments.writeEntry(entry);
+  deps.environments.load();
+}
+
+/** What a connection test found: the migrations mmk read there, or mmk's error as is */
+export type ConnectionCheck =
+  | { ok: true; migrations: number; pending: number }
+  | { ok: false; message: string };
+
+/**
+ * Test a connection with `mmk status --json`, the project's own mmk, as every read does. Shows
+ * nothing: the caller says how it went.
+ */
+export async function checkConnection(
+  deps: Deps,
+  project: ProjectSnapshot,
+  name: string,
+  connection: Connection,
+): Promise<ConnectionCheck> {
+  if (project.state.kind !== 'ready') {
+    return { ok: false, message: project.state.message };
+  }
+  try {
+    const output = await runMmkJson(project.state.invocation, ['status'], {
+      env: connectionEnv(connection),
+      timeoutMs: 60_000,
+      onStderrLine: (line) => deps.log.mmkOutput(line, 'debug'),
+    });
+    const rows = parseStatusRows(output.value, 'status');
+    return {
+      ok: true,
+      migrations: rows.length,
+      pending: rows.filter((row) => row.status === 'pending').length,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    deps.log.warn(
+      `Testing ${name}: ${error instanceof MmkCommandError && error.failure.code ? `${error.failure.code}: ` : ''}${message}`,
+    );
+    return { ok: false, message };
+  }
+}
+
+/**
+ * Add an environment from a command's arguments (scripts and tests): any missing value is asked
+ * for, the connection is tested, then kept in the OS keychain; settings get only the name and
+ * flags. Returns the name, or undefined when cancelled.
  */
 async function addEnvironment(deps: Deps, args: AddArgs): Promise<string | undefined> {
   const project = await resolveProject(
@@ -270,9 +336,7 @@ async function addEnvironment(deps: Deps, args: AddArgs): Promise<string | undef
     return undefined;
   }
 
-  await deps.environments.saveConnection(project.dir, name.trim(), connection);
-  await deps.environments.writeEntry({ name: name.trim(), readOnly });
-  deps.environments.load();
+  await saveEnvironment(deps, project.dir, { name: name.trim(), readOnly }, connection);
   void vscode.window
     .showInformationMessage(
       `Added ${name.trim()} (${hostLabel(connection.uri, connection.dbName)}${readOnly ? ', read-only' : ''}). Its connection string is in the OS keychain, not in settings.`,
@@ -364,37 +428,20 @@ async function testConnection(
   name: string,
   connection: Connection,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (project.state.kind !== 'ready') {
-    return { ok: false, message: project.state.message };
+  const check = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `mmk: testing the connection to ${name}…`,
+    },
+    () => checkConnection(deps, project, name, connection),
+  );
+  if (!check.ok) {
+    return check;
   }
-  const { invocation } = project.state;
-  try {
-    const output = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `mmk: testing the connection to ${name}…`,
-      },
-      () =>
-        runMmkJson(invocation, ['status'], {
-          env: connectionEnv(connection),
-          timeoutMs: 60_000,
-          onStderrLine: (line) => deps.log.mmkOutput(line, 'debug'),
-        }),
-    );
-    const rows = parseStatusRows(output.value, 'status');
-    const applied = rows.filter((row) => row.status === 'applied').length;
-    const pending = rows.filter((row) => row.status === 'pending').length;
-    void vscode.window.showInformationMessage(
-      `Connected to ${name} · ${applied} applied, ${pending} pending`,
-    );
-    return { ok: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    deps.log.warn(
-      `Testing ${name}: ${error instanceof MmkCommandError && error.failure.code ? `${error.failure.code}: ` : ''}${message}`,
-    );
-    return { ok: false, message };
-  }
+  void vscode.window.showInformationMessage(
+    `Connected to ${name} · ${check.migrations - check.pending} applied, ${check.pending} pending`,
+  );
+  return { ok: true };
 }
 
 /** Read-only is on by default for anything but local */

@@ -44,6 +44,14 @@ sidebar, and what mongo-migrate-kit 1.6.0 adds. It still works with mongo-migrat
   error one.
 - An environment that can't be read shows mmk's message as is, with *Try again*, *Edit
   connection* and *Show output*.
+- **Add environment is one form** in the console (`mmk: Add environment…`, the `+` next to its
+  tabs, or the sidebar): name, database, the connection string (masked, with a show button),
+  read-only (on by default) and a colour. *Test connection* asks mmk (`mmk status`) and says what
+  it read, or shows mmk's error with *Add anyway*. Add tests it first unless it just passed. The
+  connection string goes to the keychain only; it's never sent back to the form.
+- **Dismiss** next to *Review it* on the console's "edited after it ran" notice: it stays hidden
+  until that migration runs again. The console's notices now show together instead of taking
+  turns.
 
 ### With mongo-migrate-kit 1.6.0
 
@@ -56,11 +64,12 @@ On by themselves once a project has mongo-migrate-kit 1.6.0 or later:
 - The project's settings come from `mmk config --json`, so its migrations show even before it has
   a connection string.
 - When a run stops partway, the console's result lists what ran before it from mmk's own error.
-- **Who holds the migration lock** (`mmk lock`): when another run holds an environment's lock, its
-  pipeline card, the console (a notice and its tab), the tree and the status bar name the holder,
-  since when, and when the lock frees itself if that run crashed, before a run that would fail with
-  `LOCK_ALREADY_HELD`. *Release the lock…* in the console or the tree asks first, and only writable
-  environments offer it. A lock mmk reports stale isn't shown: the next run takes it over.
+- **Who holds the migration lock** (`mmk lock`): when another run holds an environment's lock, the
+  line under the console's tabs says "Locked by ci on deploy-runner-7 · 4 min"; a click shows the
+  process, since when and when the lock frees itself if that run crashed. The environment's card in
+  the sidebar, its tab, the tree and the status bar show it too, and runs stay greyed out until it
+  lets go (*Plan* still works). *Release…* asks first, and only writable environments offer it. A
+  lock mmk reports stale isn't shown: the next run takes it over.
 
 ### Changed
 

@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { type Deps, databaseLabel, relativeDir, resolveProject } from '../../commands/context.js';
+import { checkConnection, saveEnvironment } from '../../commands/environments.js';
 import { applyPending, rollBackBatch } from '../../commands/run.js';
 import { currentBranch, defaultRemoteRef } from '../../git/branches.js';
 import { copyRefFolder } from '../../git/ref-files.js';
@@ -15,13 +16,19 @@ import {
   type PlanStep,
   buildConsole,
   buildResult,
+  editedKeys,
   isConsoleMessage,
   planSteps,
 } from '../../mmk/console.js';
 import { parseStatusRows } from '../../mmk/contract.js';
 import type { WireStatusRow } from '../../mmk/contract.js';
-import type { Environment } from '../../mmk/environments.js';
-import { environmentLocks } from '../../mmk/lock-holder.js';
+import {
+  type Connection,
+  type Environment,
+  connectionStringProblem,
+  environmentNameProblem,
+} from '../../mmk/environments.js';
+import { environmentLock, environmentLocks } from '../../mmk/lock-holder.js';
 import { type MatrixInput, buildMatrix, matrixInputs } from '../../mmk/matrix.js';
 import type { FinishedRun, ProjectSnapshot } from '../../mmk/store.js';
 
@@ -46,9 +53,41 @@ export type DrawerView =
       steps: PlanStep[];
       error: string | null;
       cli: string;
+      /** Why Apply can't run now (another run holds the lock), or empty */
+      locked: string;
     }
   | { kind: 'applying'; environment: string; files: string[] }
   | { kind: 'result'; result: ConsoleResult };
+
+/** A problem with one field of the *Add environment* dialog, in words */
+interface FieldErrors {
+  name?: string;
+  uri?: string;
+  dbName?: string;
+}
+
+/**
+ * The *Add environment* dialog (C13). The connection string stays in the webview's field and in
+ * the messages that test or save it: it's never part of the view sent back.
+ */
+interface AddDialog {
+  test: { state: 'idle' | 'testing' | 'ok' | 'failed'; text: string };
+  errors: FieldErrors;
+  saving: boolean;
+  /** The connection the last test passed for, so Add doesn't test it twice; kept here only */
+  passed: Connection | null;
+  /** The last test failed, so Add offers to save anyway */
+  canForce: boolean;
+}
+
+/** The dialog as the webview draws it */
+export interface DialogView {
+  kind: 'addEnvironment';
+  test: AddDialog['test'];
+  errors: FieldErrors;
+  saving: boolean;
+  canForce: boolean;
+}
 
 /** At most this many lines of a run's output are kept for the console */
 const OUTPUT_LINES = 400;
@@ -68,6 +107,8 @@ export interface ConsoleView {
   /** The picked migration's CLI command, as Copy CLI command would copy it */
   cli: string;
   drawer: DrawerView | null;
+  /** The *Add environment* dialog, when it's open */
+  dialog: DialogView | null;
   /**
    * The last command run in this project, from anywhere, with mmk's output (C7). It stays after
    * it ends, finished or failed, until the user closes it.
@@ -89,7 +130,12 @@ export interface RunView {
  * Register the migration console (design C1–C4): "mmk: Open migration console", and "Compare
  * all environments", which opens it with *Only differences*. Both return the panel, for tests.
  */
-export function registerConsole(deps: Deps, extensionUri: vscode.Uri): vscode.Disposable[] {
+export function registerConsole(
+  deps: Deps,
+  extensionUri: vscode.Uri,
+  /** Workspace state, where dismissed notices are kept */
+  state: vscode.Memento,
+): vscode.Disposable[] {
   const panels = new Map<string, ConsolePanel>();
   const open = async (
     target: unknown,
@@ -103,7 +149,9 @@ export function registerConsole(deps: Deps, extensionUri: vscode.Uri): vscode.Di
     if (panel) {
       panel.reveal();
     } else {
-      panel = new ConsolePanel(deps, extensionUri, project.dir, () => panels.delete(project.dir));
+      panel = new ConsolePanel(deps, extensionUri, project.dir, state, () =>
+        panels.delete(project.dir),
+      );
       panels.set(project.dir, panel);
     }
     if (filter) {
@@ -154,11 +202,15 @@ export class ConsolePanel implements vscode.Disposable {
   private drawer: Drawer | null = null;
   /** The last command run in this project, kept until the user closes it */
   private run: RunView | null = null;
+  private dialog: AddDialog | null = null;
+  /** Every migration edited after it ran, as of the last view (`editedKeys`) */
+  private edited = new Set<string>();
 
   constructor(
     private readonly deps: Deps,
     extensionUri: vscode.Uri,
     private readonly dir: string,
+    private readonly state: vscode.Memento,
     private readonly onDispose: () => void,
   ) {
     const codicons = vscode.Uri.joinPath(
@@ -339,8 +391,152 @@ export class ConsolePanel implements vscode.Disposable {
       case 'showOutput':
         return vscode.commands.executeCommand('mmk.showOutput');
       case 'addEnvironment':
-        return vscode.commands.executeCommand('mmk.addEnvironment');
+        this.dialog = {
+          test: { state: 'idle', text: '' },
+          errors: {},
+          saving: false,
+          passed: null,
+          canForce: false,
+        };
+        this.post();
+        return undefined;
+      case 'closeDialog':
+        if (!this.dialog?.saving) {
+          this.dialog = null;
+          this.post();
+        }
+        return undefined;
+      case 'testEnvironment':
+        return this.testEnvironment(message.name, { uri: message.uri, dbName: message.dbName });
+      case 'saveEnvironment':
+        return this.saveEnvironment(message);
+      case 'dismissNotice':
+        return this.dismissNotice();
     }
+  }
+
+  /** The dialog's connection fields, checked the way the old prompts checked them */
+  private connectionErrors(connection: Connection): FieldErrors {
+    const uri = connectionStringProblem(connection.uri);
+    return {
+      ...(uri === null ? {} : { uri }),
+      ...(connection.dbName.trim() === '' ? { dbName: 'Type the database name' } : {}),
+    };
+  }
+
+  /** Test the dialog's connection with `mmk status`, and say what mmk read or its error */
+  private async testEnvironment(
+    name: string,
+    fields: Connection,
+  ): Promise<ConnectionCheckView | undefined> {
+    const dialog = this.dialog;
+    const project = this.deps.store.snapshot(this.dir);
+    if (!dialog || dialog.saving || !project) {
+      return undefined;
+    }
+    const errors = this.connectionErrors(fields);
+    dialog.errors = errors;
+    if (Object.keys(errors).length > 0) {
+      dialog.test = { state: 'idle', text: '' };
+      this.post();
+      return undefined;
+    }
+    const connection = { uri: fields.uri.trim(), dbName: fields.dbName.trim() };
+    const label = name.trim() || connection.dbName;
+    dialog.test = { state: 'testing', text: `Testing ${label} with mmk status…` };
+    this.post();
+    const check = await checkConnection(this.deps, project, label, connection);
+    if (this.dialog !== dialog) {
+      return undefined;
+    }
+    dialog.test = check.ok
+      ? { state: 'ok', text: connectedText(label, check.migrations, check.pending) }
+      : { state: 'failed', text: check.message };
+    dialog.passed = check.ok ? connection : null;
+    dialog.canForce = !check.ok;
+    this.post();
+    return check.ok ? { ok: true } : { ok: false };
+  }
+
+  /**
+   * Add the dialog's environment: check every field, test the connection unless it just passed
+   * (or the user saves anyway), then keep it like the command does and switch to it.
+   */
+  private async saveEnvironment(
+    message: Extract<ConsoleMessage, { type: 'saveEnvironment' }>,
+  ): Promise<string | undefined> {
+    const dialog = this.dialog;
+    const project = this.deps.store.snapshot(this.dir);
+    if (!dialog || dialog.saving || !project) {
+      return undefined;
+    }
+    const existing = this.deps.store.environments().map((environment) => environment.name);
+    const nameProblem = environmentNameProblem(message.name, existing);
+    const fields = { uri: message.uri, dbName: message.dbName };
+    dialog.errors = {
+      ...(nameProblem === null ? {} : { name: nameProblem }),
+      ...this.connectionErrors(fields),
+    };
+    if (Object.keys(dialog.errors).length > 0) {
+      this.post();
+      return undefined;
+    }
+    const name = message.name.trim();
+    const connection = { uri: message.uri.trim(), dbName: message.dbName.trim() };
+    const tested =
+      dialog.passed?.uri === connection.uri && dialog.passed.dbName === connection.dbName;
+    dialog.saving = true;
+    if (!tested && !message.force) {
+      dialog.test = { state: 'testing', text: `Testing ${name} with mmk status…` };
+      this.post();
+      const check = await checkConnection(this.deps, project, name, connection);
+      if (this.dialog !== dialog) {
+        return undefined;
+      }
+      if (!check.ok) {
+        dialog.saving = false;
+        dialog.test = { state: 'failed', text: check.message };
+        dialog.canForce = true;
+        this.post();
+        return undefined;
+      }
+      dialog.test = { state: 'ok', text: connectedText(name, check.migrations, check.pending) };
+    }
+    this.post();
+    await saveEnvironment(
+      this.deps,
+      this.dir,
+      { name, readOnly: message.readOnly, ...(message.color ? { color: message.color } : {}) },
+      connection,
+    );
+    this.dialog = null;
+    await this.deps.environments.select(name);
+    this.post();
+    return name;
+  }
+
+  /** Hide the edited notice for the migrations it names, until one of them runs again */
+  private async dismissNotice(): Promise<string[]> {
+    const keys = this.buildView().model.notices.flatMap((notice) => notice.dismiss ?? []);
+    if (keys.length === 0) {
+      return [];
+    }
+    // Keep only what is still edited somewhere, so the list doesn't grow forever.
+    const kept = this.dismissedKeys().filter((key) => this.edited.has(key));
+    await this.state.update(this.dismissedKey(), [...new Set([...kept, ...keys])]);
+    this.post();
+    return keys;
+  }
+
+  private dismissedKey(): string {
+    return `mmk.dismissedNotices:${this.dir}`;
+  }
+
+  private dismissedKeys(): string[] {
+    const stored: unknown = this.state.get(this.dismissedKey());
+    return Array.isArray(stored)
+      ? stored.filter((key): key is string => typeof key === 'string')
+      : [];
   }
 
   /** Show what `up` would apply on the selected environment: mmk's dry run, nothing written */
@@ -449,7 +645,7 @@ export class ConsolePanel implements vscode.Disposable {
    */
   private async runAction(action: ConsoleAction): Promise<unknown> {
     const detail = this.buildView().model.detail;
-    if (!detail?.buttons.some((button) => button.action === action)) {
+    if (!detail?.buttons.some((button) => button.action === action && !button.disabled)) {
       return undefined;
     }
     if (action === 'showAppliedVersion') {
@@ -463,9 +659,16 @@ export class ConsolePanel implements vscode.Disposable {
     return vscode.commands.executeCommand(`mmk.${action}`, { dir: this.dir, file: detail.file });
   }
 
-  private async copy(what?: 'plan'): Promise<string | undefined> {
+  private async copy(what?: 'plan' | 'lock'): Promise<string | undefined> {
     const view = this.buildView();
-    const cli = what === 'plan' ? (view.drawer?.kind === 'plan' ? view.drawer.cli : '') : view.cli;
+    const cli =
+      what === 'lock'
+        ? this.cli(this.deps.store.selected(), ['lock'])
+        : what === 'plan'
+          ? view.drawer?.kind === 'plan'
+            ? view.drawer.cli
+            : ''
+          : view.cli;
     if (!cli) {
       return undefined;
     }
@@ -575,6 +778,7 @@ export class ConsolePanel implements vscode.Disposable {
     const filesLabel = this.source.kind === 'ref' ? this.source.ref : 'your branch';
     const inputs = environments.map((environment) => this.input(project, environment));
     const matrix = buildMatrix(inputs, filesLabel);
+    this.edited = editedKeys(matrix);
     const model = buildConsole({
       matrix,
       environments,
@@ -584,6 +788,7 @@ export class ConsolePanel implements vscode.Disposable {
       rows: Object.fromEntries(inputs.map((input) => [input.environment.name, input.rows])),
       filesAreLocal: this.source.kind === 'branch',
       locks: environmentLocks(project, environments),
+      dismissed: new Set(this.dismissedKeys()),
     });
     const readAt = environments
       .map((environment) => project?.environments[environment.name]?.readAt)
@@ -621,6 +826,15 @@ export class ConsolePanel implements vscode.Disposable {
       model,
       cli: model.detail ? this.cli(selected, model.detail.cli) : '',
       drawer: this.drawerView(project, files),
+      dialog: this.dialog
+        ? {
+            kind: 'addEnvironment',
+            test: this.dialog.test,
+            errors: this.dialog.errors,
+            saving: this.dialog.saving,
+            canForce: this.dialog.canForce,
+          }
+        : null,
       run: this.run ? { ...this.run, lines: [...this.run.lines] } : null,
     };
   }
@@ -632,12 +846,14 @@ export class ConsolePanel implements vscode.Disposable {
     }
     const environment = this.deps.store.environment(drawer.environment);
     const readOnly = environment?.readOnly ?? true;
+    const lock = environmentLock(project, drawer.environment);
     return {
       ...drawer,
       readOnly,
       database: databaseLabel(project, drawer.environment),
       files,
       cli: environment ? this.cli(environment, readOnly ? ['dry-run', 'up'] : ['up']) : '',
+      locked: lock && !readOnly ? `${drawer.environment} is locked by ${lock.who}` : '',
     };
   }
 
@@ -700,10 +916,25 @@ export class ConsolePanel implements vscode.Disposable {
 </head>
 <body>
 <main id="app" aria-live="polite"></main>
+<div id="dialog"></div>
 <script nonce="${nonce}" src="${js}"></script>
 </body>
 </html>`;
   }
+}
+
+/** What the dialog's connection test found, for tests: never the connection itself */
+interface ConnectionCheckView {
+  ok: boolean;
+}
+
+/** `Connected: mmk status read 8 migrations on qa, 3 of them pending.` */
+function connectedText(name: string, migrations: number, pending: number): string {
+  if (migrations === 0) {
+    return `Connected: mmk status found no migrations on ${name} yet.`;
+  }
+  const count = `${migrations} ${migrations === 1 ? 'migration' : 'migrations'}`;
+  return `Connected: mmk status read ${count} on ${name}, ${pending} of them pending.`;
 }
 
 function clock(date: Date): string {

@@ -54,11 +54,15 @@ whatever it shows, `npx mmk` says the same in a terminal.
   back the batch, or release a held lock.
 - **Roll back a batch** (`mmk: Roll back a batch…`, or from the console): the confirmation names
   every migration in it.
-- **Who holds the migration lock:** when another run holds an environment's lock, its pipeline
-  card, the console, the tree and the status bar say who (user, host and process), since when, and
-  when it frees itself if that run crashed. That's before you start a run that would fail, not
-  after. *Release the lock…* asks first, and only writable environments offer it. Needs
-  mongo-migrate-kit 1.6.0 or later.
+- **Who holds the migration lock:** when another run holds an environment's lock, the line under
+  the console's tabs says so ("Locked by ci on deploy-runner-7 · 4 min"), and so do the
+  environment's card in the sidebar and the status bar. Click it for the process, since when, and
+  when it frees itself if that run crashed. Runs stay greyed out until it lets go; *Plan* still
+  works. *Release…* asks first, and only writable environments offer it. Needs mongo-migrate-kit
+  1.6.0 or later.
+- **Edited after it ran:** the console says so above the table, with *Review it* and *Dismiss*.
+  Dismissed, it stays quiet until that migration runs again; the table and the editor still mark
+  the file.
 - **Nothing runs on its own.** Every run is a click; rolling back, redoing and releasing the lock
   ask first. *Copy CLI command* gives you the same command for a terminal.
 
@@ -81,9 +85,12 @@ This needs mongo-migrate-kit 1.6.0 or later, which reports the checksum each mig
 
 ![Switching to prod (read-only), then the migration console on what differs](media/readme/environments.gif)
 
-- **Add an environment** (`mmk: Add environment…`): a name, the connection string in a masked box,
-  and the database. The connection is tested with `mmk status`, then kept in your **OS keychain**.
-  It reaches mmk as `MMK_URI` / `MMK_DB` and is never written to settings, logs or the command line.
+- **Add an environment** (`mmk: Add environment…`, the `+` next to the console's tabs, or *Add
+  environment…* in the sidebar): one form with the name, the database, the connection string in a
+  masked box, read-only (on by default) and a colour. The connection is tested with `mmk status`
+  before it's added ("Connected: mmk status read 8 migrations on qa, 3 of them pending"), then kept
+  in your **OS keychain**. It reaches mmk as `MMK_URI` / `MMK_DB` and is never written to settings,
+  logs or the command line.
 - **Read-only by default.** Anything but `local` only ever runs `status`, `list` and `dry-run`. The
   run links offer *Dry run* and *Copy CLI command*, and every write command refuses in code, not
   just in the UI. Deploys stay with your pipeline.

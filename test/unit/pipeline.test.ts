@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WireStatusRow } from '../../src/mmk/contract.js';
 import { type Environment, localEnvironment } from '../../src/mmk/environments.js';
+import type { HeldLock } from '../../src/mmk/lock-holder.js';
 import type { MatrixInput } from '../../src/mmk/matrix.js';
 import { buildPipeline, isPipelineMessage } from '../../src/mmk/pipeline.js';
 
@@ -172,10 +173,15 @@ describe('buildPipeline', () => {
 });
 
 describe('buildPipeline locks', () => {
-  const HELD = {
-    holder: 'ci on deploy-runner-7 (pid 4242)',
+  const HELD: HeldLock = {
+    user: 'ci',
+    who: 'ci on deploy-runner-7',
+    process: 'pid 4242',
+    since: '11:40',
+    age: '20 min',
+    frees: '11:41',
     summary: 'Locked by ci on deploy-runner-7 (pid 4242) since 11:40',
-    expires: 'If that run crashed, the lock frees itself at 11:41',
+    expires: 'If that run crashed, the lock frees itself by 11:41',
   };
 
   it("should name another run's lock on its step, and only there", () => {

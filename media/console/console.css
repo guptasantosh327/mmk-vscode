@@ -246,16 +246,28 @@ button.link:hover {
   flex: 1 1 100%;
 }
 
-.notice.edited,
-.notice.locked {
+.notice.edited {
   border-color: var(--vscode-inputValidation-warningBorder);
   background: var(--vscode-inputValidation-warningBackground);
 }
 
-.notice.edited .notice-line .codicon,
-.notice.locked .notice-line .codicon,
-.tab-lock .codicon {
+.notice.edited .notice-line .codicon {
   color: var(--vscode-editorWarning-foreground);
+}
+
+.notice + .notice {
+  margin-top: -6px;
+}
+
+button.quiet {
+  border-color: transparent;
+  color: var(--vscode-descriptionForeground);
+  background: none;
+}
+
+button.quiet:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground);
 }
 
 .notice.unreadable {
@@ -743,4 +755,295 @@ body.drawer-open {
   font-size: 0.9em;
   white-space: pre-wrap;
   overflow: auto;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* The line under the tabs: the selected environment, and another run's lock on it (design A) */
+.env-line {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 28px;
+  margin-top: 8px;
+  font-size: 0.92em;
+}
+
+.env-name {
+  font-weight: 600;
+}
+
+/* An amber dot on a tab whose environment another run has locked */
+.tab-busy {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vscode-editorWarning-foreground);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-editorWarning-foreground) 25%, transparent);
+}
+
+button.lock-pill {
+  gap: 7px;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground) 45%, transparent);
+  border-radius: 12px;
+  color: var(--vscode-editorWarning-foreground);
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 10%, transparent);
+}
+
+button.lock-pill:hover,
+button.lock-pill[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 18%, transparent);
+}
+
+.lock-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(420px, 100%);
+  padding: 16px;
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 8px 24px var(--vscode-widget-shadow);
+}
+
+.lock-popover-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.lock-popover .buttons {
+  align-items: center;
+}
+
+.drawer-icon.warning .codicon {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+/* Add environment (C13): a dialog over the console */
+.dialog-overlay {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 16px;
+  overflow-y: auto;
+}
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 100%);
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 16px 48px var(--vscode-widget-shadow);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.field-error {
+  color: var(--vscode-errorForeground);
+  font-size: 0.92em;
+}
+
+.field-error:empty {
+  display: none;
+}
+
+.field input,
+.secret {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  font: inherit;
+}
+
+.field input:focus,
+.secret:focus-within {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.secret {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding-right: 2px;
+}
+
+.secret input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+
+.toggle-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+button.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: var(--vscode-input-background);
+}
+
+button.switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground);
+  content: "";
+}
+
+button.switch[aria-checked="true"] {
+  border-color: var(--vscode-button-background);
+  background: var(--vscode-button-background);
+}
+
+button.switch[aria-checked="true"]::after {
+  left: 16px;
+  background: var(--vscode-button-foreground);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+button.swatch {
+  min-width: 30px;
+  height: 28px;
+  justify-content: center;
+  padding: 0 10px;
+  color: var(--vscode-foreground);
+  background: none;
+}
+
+button.swatch[aria-pressed="true"] {
+  border-color: var(--vscode-focusBorder);
+  color: var(--vscode-foreground);
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+button.swatch .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--hue);
+}
+
+.test-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  min-height: 24px;
+  padding: 10px 14px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+}
+
+.test-line.ok {
+  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed) 45%, transparent);
+}
+
+.test-line.ok .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.test-line.failed {
+  border-color: var(--vscode-inputValidation-errorBorder);
+}
+
+.test-line.failed .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+.test-line .mmk-message {
+  flex: 1 1 100%;
+  order: 1;
+  margin: 0;
 }

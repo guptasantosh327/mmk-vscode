@@ -385,6 +385,18 @@ lock. Icon: `watch`, since `lock` already means read-only. Tests: unit (parser, 
 store), contract (`lock --json` while a slow run holds the lock; 1.5's unknown command), and an
 integration test that shows another run's lock everywhere and releases it from the console.
 
+**Redesigned** (owner, 2026-10-19: "the lock and the checksum notice take turns", and the edited
+notice needs a way to close): design **A** from the canvas page "Lock & notices". The lock left the
+notices for a line under the tabs (`ConsoleModel.environment`, with a details popover), run
+buttons are greyed out with the reason (`ConsoleButton.disabled`; the panel refuses them too),
+Apply in a plan waits for it, and the sidebar card shows "Locked by ci · 4 min" with an amber ring.
+Notices are a list (`notices`) and never take turns; the edited one has *Dismiss*, kept in
+workspace state per record (`editedKey`: environment, file, `appliedAt`), so it comes back only
+when that migration runs again. **Add environment** became C13's dialog in the console
+(`mmk.addEnvironment` without arguments; with them, the old prompts, for scripts and tests): one
+form, a `mmk status` test (`checkConnection`), and `saveEnvironment` to the keychain and settings.
+The connection string is never in the view sent to the webview (an integration test checks).
+
 *Built as:*
 - **Task 1 and 2 (C1–C4):** `src/mmk/console.ts` builds the console from `buildMatrix` and
   `buildStatusModel`: tabs with each environment's pending and needs-attention counts, the four

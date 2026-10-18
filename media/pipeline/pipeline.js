@@ -39,7 +39,8 @@
 
   function step(item) {
     const state = item.state === 'ok' ? `${item.pending} pending` : null;
-    return el('li', { class: `step hue-${item.hue}${item.selected ? ' selected' : ''}` }, [
+    const classes = `step hue-${item.hue}${item.selected ? ' selected' : ''}${item.lock ? ' locked' : ''}`;
+    return el('li', { class: classes }, [
       el('span', { class: 'node', 'aria-hidden': 'true' }),
       el(
         'button',
@@ -71,10 +72,17 @@
               ])
             : null,
           item.lock
-            ? el('span', { class: 'small line note warning', title: item.lock.expires || null }, [
-                icon('watch'),
-                el('span', { text: item.lock.summary }),
-              ])
+            ? el(
+                'span',
+                {
+                  class: 'lock-pill',
+                  title: [item.lock.summary, item.lock.expires].filter(Boolean).join('. '),
+                },
+                [
+                  icon('watch'),
+                  el('span', { text: `Locked by ${item.lock.user} · ${item.lock.age}` }),
+                ],
+              )
             : null,
         ],
       ),

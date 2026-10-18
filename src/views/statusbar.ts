@@ -58,7 +58,7 @@ export class StatusBar implements vscode.Disposable {
     } else if (unread.length === ready.length) {
       this.item.text = `$(warning) mmk: ${name} · can't read status`;
     } else if (locks.length > 0) {
-      this.item.text = `$(watch) mmk: ${name} · locked`;
+      this.item.text = `$(watch) mmk: ${name} · locked · ${pending === 0 ? 'up to date' : `${pending} pending`}`;
     } else {
       this.item.text = `$(layers) mmk: ${name} · ${pending === 0 ? 'up to date' : `${pending} pending`}`;
     }

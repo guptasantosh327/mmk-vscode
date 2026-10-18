@@ -4,11 +4,14 @@ import {
   type ResultInput,
   buildConsole,
   buildResult,
+  editedKey,
+  editedKeys,
   isConsoleMessage,
   planSteps,
 } from '../../src/mmk/console.js';
 import type { WireStatusRow } from '../../src/mmk/contract.js';
 import { type Environment, localEnvironment } from '../../src/mmk/environments.js';
+import type { HeldLock } from '../../src/mmk/lock-holder.js';
 import { type MatrixInput, buildMatrix } from '../../src/mmk/matrix.js';
 
 const LOCAL = localEnvironment();
@@ -183,12 +186,15 @@ describe('buildConsole', () => {
       'showAppliedVersion',
       'down',
     ]);
-    expect(model.notice).toEqual({
-      kind: 'edited',
-      file: BACKFILL,
-      actions: ['review'],
-      text: "backfill-order-status.js was edited after it ran on local in batch 2. mmk won't roll it back until it matches again.",
-    });
+    expect(model.notices).toEqual([
+      {
+        kind: 'edited',
+        file: BACKFILL,
+        dismiss: [editedKey('local', BACKFILL, '2026-10-17T12:00:00.000Z')],
+        actions: ['review', 'dismiss'],
+        text: "backfill-order-status.js was edited after it ran on local in batch 2. mmk won't roll it back until it matches again.",
+      },
+    ]);
   });
 
   it('should offer nothing to run for a record whose file is on another branch', () => {
@@ -210,7 +216,15 @@ describe('buildConsole', () => {
   it('should only plan and preview on a read-only environment', () => {
     const pendingOnStaging = buildConsole(input({ selected: 'staging' }));
     expect(pendingOnStaging.readOnly).toBe(true);
-    expect(pendingOnStaging.notice?.kind).toBe('read-only');
+    // The environment line says it's read-only, so no notice repeats it
+    expect(pendingOnStaging.notices).toEqual([]);
+    expect(pendingOnStaging.environment).toMatchObject({
+      name: 'staging',
+      readOnly: true,
+      database: 'staging-host/orders',
+      lock: null,
+      canRelease: false,
+    });
     expect(pendingOnStaging.detail).toMatchObject({
       file: REGION,
       buttons: [{ action: 'dryRun', label: 'Plan on staging', primary: false }],
@@ -281,7 +295,7 @@ describe('buildConsole', () => {
 
     expect(empty.rows).toEqual([]);
     expect(empty.detail).toBeNull();
-    expect(empty.notice).toBeNull();
+    expect(empty.notices).toEqual([]);
   });
 });
 
@@ -299,6 +313,29 @@ describe('isConsoleMessage', () => {
       { type: 'applyPlan' },
       { type: 'rollBack', batch: 3 },
       { type: 'unlock' },
+      { type: 'copy', what: 'lock' },
+      { type: 'dismissNotice' },
+      { type: 'addEnvironment' },
+      { type: 'closeDialog' },
+      { type: 'testEnvironment', name: 'qa', uri: 'mongodb://qa.example.com', dbName: 'orders_qa' },
+      {
+        type: 'saveEnvironment',
+        name: 'qa',
+        uri: 'mongodb://qa.example.com',
+        dbName: 'orders_qa',
+        readOnly: true,
+        color: null,
+        force: false,
+      },
+      {
+        type: 'saveEnvironment',
+        name: 'qa',
+        uri: 'mongodb://qa.example.com',
+        dbName: 'orders_qa',
+        readOnly: false,
+        color: 'purple',
+        force: true,
+      },
     ]) {
       expect(isConsoleMessage(message), JSON.stringify(message)).toBe(true);
     }
@@ -320,6 +357,27 @@ describe('isConsoleMessage', () => {
       { type: 'rollBack', batch: 0 },
       { type: 'rollBack', batch: 2.5 },
       { type: 'rollBack', batch: '3' },
+      { type: 'copy', what: 'everything' },
+      { type: 'testEnvironment', name: 'qa', uri: 42, dbName: 'orders_qa' },
+      { type: 'testEnvironment', name: 'qa', uri: 'x'.repeat(5000), dbName: 'orders_qa' },
+      {
+        type: 'saveEnvironment',
+        name: 'qa',
+        uri: 'mongodb://qa.example.com',
+        dbName: 'orders_qa',
+        readOnly: 'yes',
+        color: null,
+        force: false,
+      },
+      {
+        type: 'saveEnvironment',
+        name: 'qa',
+        uri: 'mongodb://qa.example.com',
+        dbName: 'orders_qa',
+        readOnly: true,
+        color: 'pink',
+        force: false,
+      },
     ]) {
       expect(isConsoleMessage(message), JSON.stringify(message)).toBe(false);
     }
@@ -350,50 +408,84 @@ describe('buildConsole notices', () => {
   }
 
   it("should show mmk's own message for an environment it couldn't read", () => {
-    expect(buildConsole(unreadable(STAGING, 'error')).notice).toEqual({
+    expect(buildConsole(unreadable(STAGING, 'error')).notices[0]).toEqual({
       kind: 'unreadable',
       text: "Couldn't read staging. mmk said:",
       detail: 'Could not connect to MongoDB at mongodb://***:***@db.example.com',
       actions: ['retry', 'editEnvironment', 'showOutput'],
     });
     // local's connection comes from the project's config, so there's nothing to edit here
-    expect(buildConsole(unreadable(LOCAL, 'error')).notice?.actions).toEqual([
+    expect(buildConsole(unreadable(LOCAL, 'error')).notices[0]?.actions).toEqual([
       'retry',
       'showOutput',
     ]);
   });
 
-  const HELD = {
-    holder: 'ci on deploy-runner-7 (pid 4242)',
+  const HELD: HeldLock = {
+    user: 'ci',
+    who: 'ci on deploy-runner-7',
+    process: 'pid 4242',
+    since: '11:40',
+    age: '20 min',
+    frees: '11:41',
     summary: 'Locked by ci on deploy-runner-7 (pid 4242) since 11:40',
-    expires: 'If that run crashed, the lock frees itself at 11:41',
+    expires: 'If that run crashed, the lock frees itself by 11:41',
   };
 
-  it('should say who holds the lock on a writable environment, and offer to release it', () => {
+  it("should put another run's lock on the environment line, beside the notices, and grey out runs", () => {
     const model = buildConsole(input({ locks: { local: HELD } }));
 
-    expect(model.notice).toEqual({
-      kind: 'locked',
-      text: "Locked by ci on deploy-runner-7 (pid 4242) since 11:40. Until it's released, a run on local fails with LOCK_ALREADY_HELD. If that run crashed, the lock frees itself at 11:41.",
-      actions: ['unlock', 'retry'],
+    expect(model.environment).toEqual({
+      name: 'local',
+      readOnly: false,
+      database: 'local-host/orders',
+      lastRun: 'Last run 2 min ago',
+      lock: HELD,
+      canRelease: true,
     });
+    // The lock doesn't push the edited notice out
+    expect(model.notices.map((notice) => notice.kind)).toEqual(['edited']);
     expect(model.tabs.map((tab) => [tab.name, tab.lock])).toEqual([
       ['local', HELD.summary],
       ['staging', ''],
       ['prod', ''],
     ]);
+    expect(model.detail?.buttons).toEqual([
+      {
+        action: 'up',
+        label: 'Run up on local',
+        primary: true,
+        disabled: 'local is locked by ci on deploy-runner-7',
+      },
+      { action: 'dryRun', label: 'Plan', primary: false },
+    ]);
+    expect(model.detail?.note).toBe(
+      "Runs wait for the lock: ci on deploy-runner-7 has held it since 11:40. Plan still works; it doesn't take the lock.",
+    );
   });
 
-  it('should say a run is in progress on a read-only environment, without offering to release it', () => {
-    expect(buildConsole(input({ selected: 'prod', locks: { prod: HELD } })).notice).toEqual({
-      kind: 'locked',
-      text: 'Locked by ci on deploy-runner-7 (pid 4242) since 11:40: a run is in progress on prod. If that run crashed, the lock frees itself at 11:41.',
-      actions: ['retry'],
-    });
+  it('should name the holder on a read-only environment without offering to release it', () => {
+    const model = buildConsole(input({ selected: 'prod', locks: { prod: HELD } }));
+
+    expect(model.environment).toMatchObject({ lock: HELD, canRelease: false });
+    expect(model.notices).toEqual([]);
+    expect(model.detail?.buttons.every((button) => button.disabled === undefined)).toBe(true);
+  });
+
+  it('should hide a dismissed edited notice until that migration runs again', () => {
+    const key = editedKey('local', BACKFILL, '2026-10-17T12:00:00.000Z');
+
+    expect(buildConsole(input({ dismissed: new Set([key]) })).notices).toEqual([]);
+    expect(
+      buildConsole(
+        input({ dismissed: new Set([editedKey('local', BACKFILL, '2026-10-01T09:00:00.000Z')]) }),
+      ).notices.map((notice) => notice.kind),
+    ).toEqual(['edited']);
+    expect([...editedKeys(input().matrix)]).toEqual([key]);
   });
 
   it('should offer to set up an environment this project has no connection for', () => {
-    expect(buildConsole(unreadable(PROD, 'not-set-up')).notice).toMatchObject({
+    expect(buildConsole(unreadable(PROD, 'not-set-up')).notices[0]).toMatchObject({
       kind: 'not-set-up',
       actions: ['editEnvironment'],
     });

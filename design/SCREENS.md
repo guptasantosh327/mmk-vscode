@@ -159,7 +159,14 @@ takes that theme's colours.
   **C9** confirm rolling back a batch.
 - **C10** the diff against the version that ran · **C11** lock held (from a run's
   `LOCK_ALREADY_HELD`; R11 shows it before a run) · **C12** can't connect (mmk's error as is) ·
-  **C13** add environment.
+  **C13** add environment (built as the console's *Add environment* dialog, 2026-10-19).
+- **Lock & notices** (page of the same name, owner's choice 2026-10-19: design **A**): another
+  run's lock sits on a line under the tabs (environment, writable or read-only, `host/db`, then
+  "Locked by ci on deploy-runner-7 · 4 min" and *Release…*); a click opens the details (A2). Tabs
+  get an amber dot, run buttons stay greyed out with the reason, the sidebar card gets the same
+  label and an amber ring on its dot (A4). Notices never take turns: the lock isn't one, read-only
+  is on the line, and the edited notice has *Review it* and *Dismiss* (A3). Design **B** (a card
+  where you'd run) was not chosen.
 - **Build it as:** a `WebviewPanel` (the matrix's, grown), strict CSP, data over `postMessage`,
   every action through the existing commands. The pipeline sidebar is a `WebviewView` above the
   tree. Colours: `--vscode-*` only (pending `charts-blue`, applied `testing-iconPassed`, edited
@@ -172,7 +179,8 @@ takes that theme's colours.
 
 - **Add environment** (Phase 3): name → masked connection-string input → database (pre-filled from
   the URI path) → "Testing connection…" → "Connected · 44 applied, 1 pending" or mmk's own error
-  message → read-only toggle (on by default for anything not `local`).
+  message → read-only toggle (on by default for anything not `local`). *Replaced by C13, the
+  console's dialog (2026-10-19); the prompts remain for "Edit environment".*
 - **Welcome views** (Phase 2): mmk not installed ("Install mongo-migrate-kit in this project");
   mmk too old ("Update to X or later"); untrusted workspace ("Trust this folder to run mmk");
   connection failed (mmk's `CONNECTION_FAILED` message, which already names the masked URI and the reason).

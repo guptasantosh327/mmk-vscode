@@ -145,9 +145,9 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
         kind: 'notice',
         dir,
         id: 'lock',
-        text: lock.summary,
+        text: `Locked by ${lock.who} · ${lock.age}`,
         tone: 'held',
-        ...(lock.expires ? { detail: lock.expires } : {}),
+        detail: [lock.summary, lock.expires].filter(Boolean).join('. '),
         ...(environment.readOnly ? {} : { command: 'mmk.unlock', args: [{ dir }] }),
       });
     }

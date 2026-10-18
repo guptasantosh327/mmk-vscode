@@ -155,7 +155,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     ...registerRunCommands(deps),
     ...registerMiscCommands(deps),
     ...registerEnvironmentCommands(deps),
-    ...registerConsole(deps, context.extensionUri),
+    ...registerConsole(deps, context.extensionUri, context.workspaceState),
     registerCreateCommand(deps),
     vscode.commands.registerCommand('mmk.refresh', async () => {
       await rediscover();

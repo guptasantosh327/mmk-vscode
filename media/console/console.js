@@ -3,7 +3,10 @@
 (() => {
   const vscode = acquireVsCodeApi();
   const app = document.getElementById('app');
+  const dialogRoot = document.getElementById('dialog');
   let view = null;
+  // The lock's details (design A2), open under the environment line
+  let lockOpen = false;
 
   const ICONS = {
     applied: 'pass',
@@ -104,7 +107,7 @@
         [
           el('span', { class: 'env-icon' }, [icon(tab.readOnly ? 'lock' : 'circle-filled')]),
           el('span', { text: tab.name }),
-          tab.lock ? el('span', { class: 'tab-lock', title: tab.lock }, [icon('watch')]) : null,
+          tab.lock ? el('span', { class: 'tab-busy', title: tab.lock }) : null,
           tab.state === 'error' ? icon('error') : null,
           tab.state === 'not-set-up' ? icon('key') : null,
           tab.state === 'ok'
@@ -174,39 +177,137 @@
 
   const NOTICE_ICONS = {
     edited: 'warning',
-    'read-only': 'lock',
     unreadable: 'error',
     'not-set-up': 'key',
-    locked: 'watch',
   };
 
-  function notice() {
-    const item = view.model.notice;
-    if (!item) return null;
-    const actions = {
-      review: () => button('Review it', null, () => send({ type: 'pick', file: item.file })),
-      retry: () => button('Try again', 'refresh', () => send({ type: 'refresh' })),
-      editEnvironment: () =>
-        button(`Edit ${view.selected}'s connection…`, 'key', () =>
-          send({ type: 'editEnvironment' }),
-        ),
-      showOutput: () => button('Show output', 'output', () => send({ type: 'showOutput' })),
-      unlock: () => button('Release the lock…', 'unlock', () => send({ type: 'unlock' })),
-    };
-    return el('div', { class: `notice ${item.kind}`, role: 'status' }, [
-      el('div', { class: 'notice-line' }, [
-        icon(NOTICE_ICONS[item.kind] || 'info'),
-        el('span', { text: item.text }),
-      ]),
-      item.detail ? el('pre', { class: 'mmk-message', text: item.detail }) : null,
-      item.actions.length > 0
-        ? el(
-            'div',
-            { class: 'buttons' },
-            item.actions.map((action) => (actions[action] ? actions[action]() : null)),
-          )
-        : null,
+  // The line under the tabs (design A): the selected environment, and another run's lock on it
+  function environmentLine() {
+    const line = view.model.environment;
+    const lock = line.lock;
+    if (!lock) lockOpen = false;
+    const facts = [line.readOnly ? 'read-only · deploys go through CI' : 'writable', line.database]
+      .filter(Boolean)
+      .join(' · ');
+    const right = lock
+      ? [
+          el(
+            'button',
+            {
+              type: 'button',
+              class: 'lock-pill',
+              'aria-expanded': String(lockOpen),
+              title: [lock.summary, lock.expires].filter(Boolean).join('. '),
+              onclick: (event) => {
+                event.stopPropagation();
+                lockOpen = !lockOpen;
+                render();
+              },
+            },
+            [
+              icon('watch'),
+              el('span', { text: `Locked by ${lock.who}` }),
+              el('span', { class: 'muted', text: `· ${lock.age}` }),
+            ],
+          ),
+          line.canRelease
+            ? el('button', {
+                type: 'button',
+                class: 'link',
+                text: 'Release…',
+                onclick: () => send({ type: 'unlock' }),
+              })
+            : null,
+        ]
+      : [el('span', { class: 'muted', text: line.lastRun })];
+    return el('div', { class: 'env-line' }, [
+      el('span', { class: 'env-name', text: line.name }),
+      el('span', { class: 'muted', text: facts }),
+      el('span', { class: 'spacer' }),
+      ...right,
+      lock && lockOpen ? lockPopover(line, lock) : null,
     ]);
+  }
+
+  function lockPopover(line, lock) {
+    const facts = [
+      ['Held by', lock.who],
+      ['Process', lock.process],
+      ['Since', `${lock.since}, ${lock.age === 'just now' ? 'just now' : `${lock.age} ago`}`],
+      lock.frees ? ['Frees itself', `by ${lock.frees}, if that run crashed`] : null,
+    ].filter(Boolean);
+    return el(
+      'div',
+      {
+        class: 'lock-popover',
+        role: 'dialog',
+        'aria-label': `Another run is migrating ${line.name}`,
+        onclick: (event) => event.stopPropagation(),
+      },
+      [
+        el('div', { class: 'lock-popover-title' }, [
+          el('span', { class: 'drawer-icon warning' }, [icon('watch')]),
+          el('h2', { text: `Another run is migrating ${line.name}` }),
+        ]),
+        el(
+          'dl',
+          { class: 'facts' },
+          facts.flatMap(([term, value]) => [el('dt', { text: term }), el('dd', { text: value })]),
+        ),
+        el('p', {
+          class: 'muted small',
+          text: line.readOnly
+            ? `mmk takes turns: one run per database. ${line.name} is read-only, so nothing here would run anyway.`
+            : `mmk takes turns: one run per database. Run up here fails with LOCK_ALREADY_HELD until it lets go. Plan still works; it doesn't take the lock.`,
+        }),
+        el('div', { class: 'buttons' }, [
+          line.canRelease
+            ? button('Release the lock…', 'unlock', () => send({ type: 'unlock' }))
+            : null,
+          button('Check again', 'refresh', () => send({ type: 'refresh' })),
+          el('span', { class: 'spacer' }),
+          el('button', {
+            type: 'button',
+            class: 'link',
+            text: 'Copy npx mmk lock',
+            onclick: () => send({ type: 'copy', what: 'lock' }),
+          }),
+        ]),
+      ],
+    );
+  }
+
+  function notices() {
+    return view.model.notices.map((item) => {
+      const actions = {
+        review: () => button('Review it', null, () => send({ type: 'pick', file: item.file })),
+        dismiss: () =>
+          button('Dismiss', null, () => send({ type: 'dismissNotice' }), {
+            class: 'quiet',
+            title: 'Hide this until the migration runs again',
+          }),
+        retry: () => button('Try again', 'refresh', () => send({ type: 'refresh' })),
+        editEnvironment: () =>
+          button(`Edit ${view.selected}'s connection…`, 'key', () =>
+            send({ type: 'editEnvironment' }),
+          ),
+        showOutput: () => button('Show output', 'output', () => send({ type: 'showOutput' })),
+      };
+      return el('div', { class: `notice ${item.kind}`, role: 'status' }, [
+        el('div', { class: 'notice-line' }, [
+          icon(NOTICE_ICONS[item.kind] || 'info'),
+          el('span', { text: item.text }),
+        ]),
+        item.detail ? el('pre', { class: 'mmk-message', text: item.detail }) : null,
+        item.actions.length > 0
+          ? el(
+              'div',
+              { class: 'buttons' },
+              item.actions.map((action) => (actions[action] ? actions[action]() : null)),
+            )
+          : null,
+      ]);
+    });
   }
 
   // The panel over the console: a run in progress (C7), a plan (C6) or a result (C8)
@@ -341,6 +442,8 @@
           () => send({ type: 'applyPlan' }),
           {
             class: 'primary',
+            disabled: plan.locked ? 'disabled' : null,
+            title: plan.locked || null,
           },
         ),
       );
@@ -404,6 +507,12 @@
             ? el('p', {
                 class: 'muted small',
                 text: `${plan.environment} is read-only, so this ends at the command. Deploys go through CI.`,
+              })
+            : null,
+          plan.locked
+            ? el('p', {
+                class: 'muted small',
+                text: `${plan.locked}: Apply works once it lets go. The plan stays the same.`,
               })
             : null,
           plan.cli ? cliLine(plan.cli, 'plan') : null,
@@ -628,6 +737,8 @@
                 () => send({ type: 'action', action: entry.action }),
                 {
                   class: entry.primary ? 'primary' : null,
+                  disabled: entry.disabled ? 'disabled' : null,
+                  title: entry.disabled || null,
                 },
               ),
             ),
@@ -675,9 +786,7 @@
       app.append(el('p', { class: 'muted', text: 'Reading environments…' }));
       return;
     }
-    app.append(header(), tabs(), chips());
-    const message = notice();
-    if (message) app.append(message);
+    app.append(header(), tabs(), environmentLine(), chips(), ...notices());
     if (view.error) {
       app.append(
         el('p', { class: 'error', role: 'alert' }, [
@@ -700,12 +809,240 @@
       const picked = app.querySelector('tr.picked .pick');
       if (picked) picked.focus();
     }
+    renderDialog();
   }
 
-  // Escape closes a plan, a result or a finished run (never a run in progress)
+  // ── Add environment (C13) ────────────────────────────────────────────────────────────────
+  // The form lives outside #app, so the redraws that follow every read never lose what the user
+  // typed. Its values stay here: the connection string goes to the extension only to test or
+  // save it, and is never stored in the webview's state.
+  const HUES = ['green', 'blue', 'purple', 'yellow', 'orange', 'red'];
+  let form = null;
+  let parts = null;
+
+  function emptyForm() {
+    return { name: '', dbName: '', uri: '', readOnly: true, color: null, showUri: false };
+  }
+
+  function field(label, input, errorKey, hint) {
+    const error = el('span', { class: 'field-error', role: 'alert' });
+    parts.errors[errorKey] = error;
+    return el('label', { class: 'field' }, [
+      el('span', { class: 'field-label', text: label }),
+      input,
+      hint ? el('span', { class: 'muted small', text: hint }) : null,
+      error,
+    ]);
+  }
+
+  function textInput(key, attrs) {
+    const input = el('input', { type: 'text', spellcheck: 'false', ...attrs });
+    input.value = form[key];
+    input.addEventListener('input', () => {
+      form[key] = input.value;
+      if (key === 'name') updateAddLabel();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !view?.dialog?.saving) save(false);
+    });
+    return input;
+  }
+
+  function buildDialog() {
+    form = form || emptyForm();
+    parts = { errors: {} };
+    const name = textInput('name', { placeholder: 'qa', 'aria-label': 'Name' });
+    const database = textInput('dbName', { placeholder: 'orders_qa', 'aria-label': 'Database' });
+    const uri = textInput('uri', {
+      type: form.showUri ? 'text' : 'password',
+      placeholder: 'mongodb+srv://user:password@cluster0.example.net',
+      'aria-label': 'Connection string',
+      autocomplete: 'off',
+    });
+    const eye = el(
+      'button',
+      {
+        type: 'button',
+        class: 'icon-button',
+        'aria-label': 'Show the connection string',
+        onclick: () => {
+          form.showUri = !form.showUri;
+          uri.type = form.showUri ? 'text' : 'password';
+          eye.replaceChildren(icon(form.showUri ? 'eye-closed' : 'eye'));
+        },
+      },
+      [icon('eye')],
+    );
+    const switchButton = el('button', {
+      type: 'button',
+      class: 'switch',
+      role: 'switch',
+      'aria-checked': String(form.readOnly),
+      'aria-label': 'Read-only',
+    });
+    const readOnlyText = el('span', { class: 'muted small' });
+    const updateReadOnly = () => {
+      switchButton.setAttribute('aria-checked', String(form.readOnly));
+      const who = form.name.trim() || 'it';
+      readOnlyText.textContent = form.readOnly
+        ? `Only status, list and dry-run run on ${who}. Turn it off only for a database you're happy to change from here.`
+        : `Runs are allowed on ${who}: up, down and redo, each after a confirmation.`;
+    };
+    switchButton.addEventListener('click', () => {
+      form.readOnly = !form.readOnly;
+      updateReadOnly();
+    });
+    name.addEventListener('input', updateReadOnly);
+    updateReadOnly();
+    const swatches = [null, ...HUES].map((hue) =>
+      el(
+        'button',
+        {
+          type: 'button',
+          class: hue ? `swatch hue-${hue}` : 'swatch auto',
+          'aria-pressed': String(form.color === hue),
+          title: hue ? hue : 'The default for its name: prod is red, the others take a free colour',
+          onclick: () => {
+            form.color = hue;
+            for (const [index, swatch] of swatches.entries()) {
+              swatch.setAttribute('aria-pressed', String([null, ...HUES][index] === hue));
+            }
+          },
+        },
+        [hue ? el('span', { class: 'dot' }) : el('span', { text: 'Automatic' })],
+      ),
+    );
+    parts.test = el('div', { class: 'test-line' });
+    parts.add = button('Add environment', null, () => save(false), { class: 'primary' });
+    parts.cancel = button('Cancel', null, () => send({ type: 'closeDialog' }));
+    const box = el('div', { class: 'dialog', role: 'dialog', 'aria-label': 'Add environment' }, [
+      el('div', { class: 'dialog-head' }, [
+        el('h2', { text: 'Add environment' }),
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'icon-button',
+            'aria-label': 'Close',
+            onclick: () => send({ type: 'closeDialog' }),
+          },
+          [icon('close')],
+        ),
+      ]),
+      el('div', { class: 'dialog-body' }, [
+        el('div', { class: 'two' }, [
+          field('Name', name, 'name'),
+          field('Database', database, 'dbName'),
+        ]),
+        field(
+          'Connection string',
+          el('span', { class: 'secret' }, [uri, eye]),
+          'uri',
+          'Kept in your OS keychain and passed to mmk as MMK_URI. Never written to settings, logs or the command line.',
+        ),
+        el('div', { class: 'toggle-row' }, [
+          switchButton,
+          el('div', { class: 'toggle-text' }, [el('span', { text: 'Read-only' }), readOnlyText]),
+        ]),
+        el('div', { class: 'field' }, [
+          el('span', { class: 'field-label', text: 'Colour' }),
+          el('div', { class: 'swatches', role: 'group', 'aria-label': 'Colour' }, swatches),
+        ]),
+        parts.test,
+      ]),
+      el('div', { class: 'dialog-foot' }, [parts.cancel, parts.add]),
+    ]);
+    dialogRoot.replaceChildren(
+      el('div', { class: 'overlay dialog-overlay' }, [
+        el('div', { class: 'backdrop', onclick: () => send({ type: 'closeDialog' }) }),
+        box,
+      ]),
+    );
+    updateAddLabel();
+    name.focus();
+  }
+
+  function updateAddLabel() {
+    if (!parts) return;
+    const label = parts.add.querySelector('span');
+    if (label) label.textContent = form.name.trim() ? `Add ${form.name.trim()}` : 'Add environment';
+  }
+
+  function save(force) {
+    send({
+      type: 'saveEnvironment',
+      name: form.name,
+      uri: form.uri,
+      dbName: form.dbName,
+      readOnly: form.readOnly,
+      color: form.color,
+      force,
+    });
+  }
+
+  function renderDialog() {
+    const dialog = view?.dialog;
+    if (!dialog) {
+      if (dialogRoot.firstChild) {
+        dialogRoot.replaceChildren();
+        form = null;
+        parts = null;
+      }
+      return;
+    }
+    if (!parts) buildDialog();
+    for (const key of ['name', 'uri', 'dbName']) {
+      parts.errors[key].textContent = dialog.errors[key] || '';
+    }
+    const test = dialog.test;
+    const testButton = button(
+      test.state === 'idle' ? 'Test connection' : 'Test again',
+      null,
+      () => send({ type: 'testEnvironment', name: form.name, uri: form.uri, dbName: form.dbName }),
+      { class: 'link', disabled: test.state === 'testing' || dialog.saving ? 'disabled' : null },
+    );
+    const line =
+      test.state === 'idle'
+        ? [el('span', { class: 'muted', text: 'Add tests the connection with mmk status first.' })]
+        : test.state === 'testing'
+          ? [icon('sync codicon-modifier-spin'), el('span', { text: test.text })]
+          : test.state === 'ok'
+            ? [icon('pass'), el('span', { text: test.text })]
+            : [icon('error'), el('pre', { class: 'mmk-message', text: test.text })];
+    parts.test.className = `test-line ${test.state}`;
+    parts.test.replaceChildren(
+      ...[
+        ...line,
+        el('span', { class: 'spacer' }),
+        dialog.canForce && !dialog.saving
+          ? button('Add anyway', null, () => save(true), { class: 'link' })
+          : null,
+        testButton,
+      ].filter(Boolean),
+    );
+    parts.add.toggleAttribute('disabled', dialog.saving);
+    parts.cancel.toggleAttribute('disabled', dialog.saving);
+  }
+
+  // Escape closes the lock's details, the dialog, then a plan, a result or a finished run (never
+  // a run in progress)
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && view && (view.drawer || view.run) && !busy()) {
+    if (event.key !== 'Escape' || !view) return;
+    if (lockOpen) {
+      lockOpen = false;
+      render();
+    } else if (view.dialog) {
+      if (!view.dialog.saving) send({ type: 'closeDialog' });
+    } else if ((view.drawer || view.run) && !busy()) {
       send({ type: 'closeDrawer' });
+    }
+  });
+
+  // A click anywhere else closes the lock's details
+  document.addEventListener('click', () => {
+    if (lockOpen) {
+      lockOpen = false;
+      render();
     }
   });
 

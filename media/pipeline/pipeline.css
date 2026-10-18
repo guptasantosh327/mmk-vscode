@@ -346,3 +346,27 @@ button.link:hover {
   flex: 1;
   justify-content: center;
 }
+
+/* Another run holds this environment's migration lock (design A4) */
+.step.locked .node {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-editorWarning-foreground) 35%, transparent);
+}
+
+.lock-pill {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+  padding: 1px 9px;
+  border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground) 45%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 10%, transparent);
+  color: var(--vscode-editorWarning-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.lock-pill .codicon {
+  font-size: 12px;
+}

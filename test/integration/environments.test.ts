@@ -298,7 +298,9 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
         ['backfill-user-status.js', ['pending', 'pending']],
       ],
     );
-    assert.equal(view.model.notice?.kind, 'read-only');
+    // The environment line says it's read-only; no notice repeats it
+    assert.deepEqual(view.model.notices, []);
+    assert.equal(view.model.environment.readOnly, true);
     assert.equal(view.model.detail?.file, BACKFILL);
     assert.deepEqual(view.model.detail?.buttons, [
       { action: 'dryRun', label: 'Plan on staging', primary: false },
@@ -357,7 +359,7 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     await api.idle();
     let view = panel.view();
     assert.equal(view.selected, 'local');
-    assert.equal(view.model.notice, null);
+    assert.deepEqual(view.model.notices, []);
     assert.equal(view.model.detail?.file, BACKFILL);
     assert.deepEqual(
       view.model.detail?.buttons.map((button) => button.action),
@@ -537,9 +539,18 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
         dir: workspaceDir,
       });
       assert.ok(panel, 'The console should open');
-      const notice = panel.view().model.notice;
-      assert.equal(notice?.kind, 'locked');
-      assert.deepEqual(notice?.actions, ['unlock', 'retry']);
+      // The lock sits on the environment line (design A), and runs wait for it
+      const line = panel.view().model.environment;
+      assert.equal(line.lock?.who, 'ci on deploy-runner-7');
+      assert.equal(line.lock?.process, 'pid 4242');
+      assert.equal(line.canRelease, true);
+      const runs = (panel.view().model.detail?.buttons ?? []).filter((button) =>
+        ['up', 'down', 'redo', 'downBatch'].includes(button.action),
+      );
+      assert.ok(
+        runs.every((button) => button.disabled === 'local is locked by ci on deploy-runner-7'),
+        'Run buttons should wait for the lock',
+      );
 
       api.setConfirm(() => true);
       await panel.receive({ type: 'unlock' });
@@ -548,12 +559,78 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
         holder: null,
         stale: false,
       });
-      assert.notEqual(panel.view().model.notice?.kind, 'locked');
+      assert.equal(panel.view().model.environment.lock, null);
       assert.equal(step()?.lock, null);
       panel.dispose();
     } finally {
       await locks.deleteMany({});
     }
+  });
+
+  test('adds an environment from the console dialog (C13), testing it with mmk status first', async () => {
+    const uri = mongo?.getUri() ?? '';
+    const panel = await vscode.commands.executeCommand<ConsolePanel>('mmk.addEnvironment', {
+      dir: workspaceDir,
+    });
+    assert.ok(panel, 'The console should open with the dialog');
+    assert.equal(panel.view().dialog?.kind, 'addEnvironment');
+
+    // Checked before mmk runs, with the same rules as before
+    await panel.receive({
+      type: 'saveEnvironment',
+      name: 'staging',
+      uri: 'http://qa.example.com',
+      dbName: '',
+      readOnly: true,
+      color: null,
+      force: false,
+    });
+    const errors = panel.view().dialog?.errors;
+    assert.match(errors?.name ?? '', /staging/);
+    assert.ok(errors?.uri, 'A connection string that isn’t mongodb:// should be refused');
+    assert.equal(errors?.dbName, 'Type the database name');
+
+    assert.deepEqual(
+      await panel.receive({ type: 'testEnvironment', name: 'qa', uri, dbName: 'mmk_qa' }),
+      { ok: true },
+    );
+    assert.equal(
+      panel.view().dialog?.test.text,
+      'Connected: mmk status read 3 migrations on qa, 3 of them pending.',
+    );
+    assert.ok(
+      !JSON.stringify(panel.view()).includes(uri),
+      'The connection string is never sent back to the webview',
+    );
+
+    const added = await panel.receive({
+      type: 'saveEnvironment',
+      name: 'qa',
+      uri,
+      dbName: 'mmk_qa',
+      readOnly: true,
+      color: 'purple',
+      force: false,
+    });
+    assert.equal(added, 'qa');
+    assert.equal(panel.view().dialog, null);
+    assert.equal(api.store.selected().name, 'qa');
+    assert.deepEqual(
+      vscode.workspace
+        .getConfiguration('mmk')
+        .get<Array<{ name: string }>>('environments')
+        ?.find((entry) => entry.name === 'qa'),
+      { name: 'qa', readOnly: true, color: 'purple' },
+    );
+    assert.deepEqual(await api.environments.connection(workspaceDir, 'qa'), {
+      uri,
+      dbName: 'mmk_qa',
+    });
+
+    api.setConfirm(() => true);
+    assert.equal(await vscode.commands.executeCommand('mmk.removeEnvironment', 'qa'), true);
+    await vscode.commands.executeCommand('mmk.selectEnvironment', 'local');
+    panel.dispose();
   });
 
   test('removes staging and its stored connection', async () => {

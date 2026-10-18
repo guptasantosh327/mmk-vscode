@@ -1,6 +1,11 @@
 import type { RunResult } from 'mongo-migrate-kit';
 import type { Wire, WireStatusRow } from './contract.js';
-import { type Environment, type EnvironmentHue, environmentHue } from './environments.js';
+import {
+  ENVIRONMENT_HUES,
+  type Environment,
+  type EnvironmentHue,
+  environmentHue,
+} from './environments.js';
 import type { HeldLock } from './lock-holder.js';
 import type { CellState, MatrixColumn, MatrixModel, MatrixRow } from './matrix.js';
 import { buildStatusModel, formatDuration, formatWhen } from './model.js';
@@ -34,7 +39,7 @@ export type ConsoleMessage =
   | { type: 'environment'; name: string }
   | { type: 'pick'; file: string }
   | { type: 'action'; action: ConsoleAction }
-  | { type: 'copy'; what?: 'plan' }
+  | { type: 'copy'; what?: 'plan' | 'lock' }
   | { type: 'open'; file: string }
   | { type: 'create' }
   | { type: 'plan' }
@@ -44,7 +49,29 @@ export type ConsoleMessage =
   | { type: 'rollBack'; batch: number }
   | { type: 'unlock' }
   | { type: 'editEnvironment' }
-  | { type: 'showOutput' };
+  | { type: 'showOutput' }
+  | { type: 'dismissNotice' }
+  | { type: 'closeDialog' }
+  | { type: 'testEnvironment'; name: string; uri: string; dbName: string }
+  | {
+      type: 'saveEnvironment';
+      name: string;
+      uri: string;
+      dbName: string;
+      readOnly: boolean;
+      /** null: the default colour for its name */
+      color: EnvironmentHue | null;
+      /** Save even though the connection test failed */
+      force: boolean;
+    };
+
+/** Longest name, database and connection string the add dialog sends */
+const MAX_FIELD = 200;
+const MAX_URI = 4096;
+
+function isText(value: unknown, max: number): value is string {
+  return typeof value === 'string' && value.length <= max;
+}
 
 /**
  * True for a message the console's webview may send, checked field by field: the webview draws
@@ -57,7 +84,7 @@ export function isConsoleMessage(value: unknown): value is ConsoleMessage {
   const message = value as Record<string, unknown>;
   switch (message.type) {
     case 'copy':
-      return message.what === undefined || message.what === 'plan';
+      return message.what === undefined || message.what === 'plan' || message.what === 'lock';
     case 'ready':
     case 'refresh':
     case 'create':
@@ -68,7 +95,24 @@ export function isConsoleMessage(value: unknown): value is ConsoleMessage {
     case 'unlock':
     case 'editEnvironment':
     case 'showOutput':
+    case 'dismissNotice':
+    case 'closeDialog':
       return true;
+    case 'testEnvironment':
+      return (
+        isText(message.name, MAX_FIELD) &&
+        isText(message.uri, MAX_URI) &&
+        isText(message.dbName, MAX_FIELD)
+      );
+    case 'saveEnvironment':
+      return (
+        isText(message.name, MAX_FIELD) &&
+        isText(message.uri, MAX_URI) &&
+        isText(message.dbName, MAX_FIELD) &&
+        typeof message.readOnly === 'boolean' &&
+        typeof message.force === 'boolean' &&
+        (message.color === null || ENVIRONMENT_HUES.some((hue) => hue === message.color))
+      );
     case 'rollBack':
       return (
         typeof message.batch === 'number' && Number.isInteger(message.batch) && message.batch > 0
@@ -106,6 +150,8 @@ export interface ConsoleInput {
   filesAreLocal: boolean;
   /** Each environment's lock (`environmentLocks`), by name */
   locks?: Readonly<Record<string, HeldLock | null>>;
+  /** Notices the user dismissed (`editedKey`): an edited migration's, until it runs again */
+  dismissed?: ReadonlySet<string>;
   now?: Date;
 }
 
@@ -169,6 +215,8 @@ export interface ConsoleButton {
   primary: boolean;
   /** The batch `downBatch` rolls back */
   batch?: number;
+  /** Why it can't run now (another run holds the lock), shown greyed out with this as its title */
+  disabled?: string;
 }
 
 /** The picked migration */
@@ -194,17 +242,33 @@ export interface ConsoleBatch {
 }
 
 /** What a notice's buttons do */
-export type NoticeAction = 'review' | 'retry' | 'editEnvironment' | 'showOutput' | 'unlock';
+export type NoticeAction = 'review' | 'dismiss' | 'retry' | 'editEnvironment' | 'showOutput';
 
-/** A line above the table when something needs saying */
+/** A line above the table when something needs saying; several can show at once */
 export interface ConsoleNotice {
-  kind: 'edited' | 'read-only' | 'unreadable' | 'not-set-up' | 'locked';
+  kind: 'edited' | 'unreadable' | 'not-set-up';
   text: string;
   /** mmk's own message, shown as is (`unreadable`) */
   detail?: string;
   /** The file *Review it* picks, for `edited` */
   file?: string;
+  /** What *Dismiss* hides (`editedKey`s), for `edited` */
+  dismiss?: string[];
   actions: NoticeAction[];
+}
+
+/** The line under the tabs: the selected environment, and another run's lock on it (design A) */
+export interface ConsoleEnvironment {
+  name: string;
+  readOnly: boolean;
+  /** Where it's read from (`host/db`), when known */
+  database: string;
+  /** `Last run 10:40`, `Nothing has run here yet`, or empty when it couldn't be read */
+  lastRun: string;
+  /** Another run's lock on it, when mmk reports one in force */
+  lock: HeldLock | null;
+  /** Writable, so *Release…* is offered (mmk.unlock asks first, naming the holder) */
+  canRelease: boolean;
 }
 
 /** Everything the console shows */
@@ -218,7 +282,8 @@ export interface ConsoleModel {
   /** Pending on the selected environment */
   pending: number;
   readOnly: boolean;
-  notice: ConsoleNotice | null;
+  environment: ConsoleEnvironment;
+  notices: ConsoleNotice[];
 }
 
 const APPLIED_KINDS = new Set<CellState['kind']>(['applied', 'edited', 'no-file']);
@@ -301,16 +366,59 @@ export function buildConsole(input: ConsoleInput): ConsoleModel {
   );
 
   const pending = tabs.find((tab) => tab.selected)?.pending ?? 0;
+  const lock = input.locks?.[name] ?? null;
+  const column = input.matrix.columns.find((candidate) => candidate.name === name);
   return {
     tabs,
     chips,
     rows,
-    detail: picked ? detailFor(picked, input, name, readOnly, records, now) : null,
+    detail: picked ? detailFor(picked, input, name, readOnly, records, now, lock) : null,
     batches: batchesOn(input.rows[name] ?? null, picked?.file ?? null, now),
     pending,
     readOnly,
-    notice: noticeFor(input.matrix, name, readOnly, kindOn, input.locks?.[name] ?? null),
+    environment: {
+      name,
+      readOnly,
+      database: column?.database ?? '',
+      lastRun: lastRunOn(column?.state === 'ok' ? (input.rows[name] ?? null) : null, now),
+      lock,
+      canRelease: lock !== null && !readOnly,
+    },
+    notices: noticesFor(input.matrix, name, kindOn, input.dismissed ?? new Set()),
   };
+}
+
+/** `Last run 10:40` from an environment's latest batch, `Nothing has run here yet`, or empty */
+function lastRunOn(rows: readonly WireStatusRow[] | null, now: Date): string {
+  if (!rows) {
+    return '';
+  }
+  const latest = buildStatusModel(rows).batches[0];
+  if (!latest) {
+    return 'Nothing has run here yet';
+  }
+  return latest.appliedAt ? `Last run ${formatWhen(latest.appliedAt, now)}` : '';
+}
+
+/**
+ * What *Dismiss* remembers for an edited migration: that record on that environment. A new run
+ * of it is a new record, so its notice shows again.
+ */
+export function editedKey(environment: string, file: string, appliedAt: string | null): string {
+  return `${environment}\u0000${file}\u0000${appliedAt ?? ''}`;
+}
+
+/** The {@link editedKey} of every migration edited after it ran, on any environment */
+export function editedKeys(matrix: MatrixModel): Set<string> {
+  const keys = new Set<string>();
+  for (const row of matrix.rows) {
+    for (const [environment, cell] of Object.entries(row.cells)) {
+      if (cell.kind === 'edited') {
+        keys.add(editedKey(environment, row.file, cell.appliedAt));
+      }
+    }
+  }
+  return keys;
 }
 
 /** The row the user picked if it's shown, else the first one `preferred` likes, else the first */
@@ -345,10 +453,16 @@ function detailFor(
   readOnly: boolean,
   records: Map<string, WireStatusRow>,
   now: Date,
+  lock: HeldLock | null,
 ): ConsoleDetail {
   const cell: CellState = row.cells[environment] ?? { kind: 'unknown' };
   const record = records.get(row.file);
-  const actions = actionsFor(row, cell, environment, readOnly, input.filesAreLocal);
+  const actions = waitForLock(
+    actionsFor(row, cell, environment, readOnly, input.filesAreLocal),
+    environment,
+    readOnly,
+    lock,
+  );
   return {
     file: row.file,
     label: row.label,
@@ -367,6 +481,32 @@ function detailFor(
       };
     }),
     ...actions,
+  };
+}
+
+/** The actions that take the migration lock, so they can't run while another run holds it */
+const LOCKING_ACTIONS = new Set<ConsoleAction>(['up', 'down', 'redo', 'downBatch']);
+
+/**
+ * While another run holds a writable environment's lock, its run buttons stay visible but greyed
+ * out, saying why (design A). *Plan* and *Show applied version* still work: they don't take it.
+ */
+function waitForLock(
+  actions: Pick<ConsoleDetail, 'buttons' | 'note' | 'cli'>,
+  environment: string,
+  readOnly: boolean,
+  lock: HeldLock | null,
+): Pick<ConsoleDetail, 'buttons' | 'note' | 'cli'> {
+  if (!lock || readOnly || !actions.buttons.some((button) => LOCKING_ACTIONS.has(button.action))) {
+    return actions;
+  }
+  const reason = `${environment} is locked by ${lock.who}`;
+  return {
+    ...actions,
+    buttons: actions.buttons.map((button) =>
+      LOCKING_ACTIONS.has(button.action) ? { ...button, disabled: reason } : button,
+    ),
+    note: `Runs wait for the lock: ${lock.who} has held it since ${lock.since}. Plan still works; it doesn't take the lock.`,
   };
 }
 
@@ -543,62 +683,63 @@ function batchesOn(
     });
 }
 
-function noticeFor(
+/**
+ * The notices above the table, all at once. An environment that can't be read says only that.
+ * The lock isn't one: it's on the environment line. Read-only isn't either: the line says it.
+ */
+function noticesFor(
   matrix: MatrixModel,
   environment: string,
-  readOnly: boolean,
   kindOn: (row: MatrixRow, environment: string) => CellState['kind'],
-  lock: HeldLock | null,
-): ConsoleNotice | null {
+  dismissed: ReadonlySet<string>,
+): ConsoleNotice[] {
   const column = matrix.columns.find((candidate) => candidate.name === environment);
   if (column?.state === 'error') {
-    return {
-      kind: 'unreadable',
-      text: `Couldn't read ${environment}. mmk said:`,
-      detail: column.message ?? '',
-      actions: column.local ? ['retry', 'showOutput'] : ['retry', 'editEnvironment', 'showOutput'],
-    };
+    return [
+      {
+        kind: 'unreadable',
+        text: `Couldn't read ${environment}. mmk said:`,
+        detail: column.message ?? '',
+        actions: column.local
+          ? ['retry', 'showOutput']
+          : ['retry', 'editEnvironment', 'showOutput'],
+      },
+    ];
   }
   if (column?.state === 'not-set-up') {
-    return {
-      kind: 'not-set-up',
-      text: `${environment} isn't set up for this project: it has no connection string in your keychain yet.`,
-      actions: ['editEnvironment'],
-    };
+    return [
+      {
+        kind: 'not-set-up',
+        text: `${environment} isn't set up for this project: it has no connection string in your keychain yet.`,
+        actions: ['editEnvironment'],
+      },
+    ];
   }
-  if (lock) {
-    const expires = lock.expires ? ` ${lock.expires}.` : '';
-    return {
-      kind: 'locked',
-      text: readOnly
-        ? `${lock.summary}: a run is in progress on ${environment}.${expires}`
-        : `${lock.summary}. Until it's released, a run on ${environment} fails with LOCK_ALREADY_HELD.${expires}`,
-      actions: readOnly ? ['retry'] : ['unlock', 'retry'],
-    };
-  }
-  if (readOnly) {
-    return {
-      kind: 'read-only',
-      text: `${environment} is read-only. The extension only runs status, list and dry-run there; deploys go through CI.`,
-      actions: [],
-    };
-  }
-  const edited = matrix.rows.filter((row) => kindOn(row, environment) === 'edited');
+  const keyOf = (row: MatrixRow): string => {
+    const cell = row.cells[environment];
+    return editedKey(environment, row.file, cell && 'appliedAt' in cell ? cell.appliedAt : null);
+  };
+  const edited = matrix.rows.filter(
+    (row) => kindOn(row, environment) === 'edited' && !dismissed.has(keyOf(row)),
+  );
   const first = edited[0];
   if (!first) {
-    return null;
+    return [];
   }
   const cell = first.cells[environment];
   const batch = cell && 'batch' in cell && cell.batch !== null ? ` in batch ${cell.batch}` : '';
-  return {
-    kind: 'edited',
-    file: first.file,
-    actions: ['review'],
-    text:
-      edited.length === 1
-        ? `${first.label} was edited after it ran on ${environment}${batch}. mmk won't roll it back until it matches again.`
-        : `${edited.length} migrations were edited after they ran on ${environment}. mmk won't roll them back until they match again.`,
-  };
+  return [
+    {
+      kind: 'edited',
+      file: first.file,
+      dismiss: edited.map(keyOf),
+      actions: ['review', 'dismiss'],
+      text:
+        edited.length === 1
+          ? `${first.label} was edited after it ran on ${environment}${batch}. mmk won't roll it back until it matches again.`
+          : `${edited.length} migrations were edited after they ran on ${environment}. mmk won't roll them back until they match again.`,
+    },
+  ];
 }
 
 function when(iso: string, now: Date): string {

@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { WireLockStatus } from '../../src/mmk/contract.js';
-import { environmentLock, environmentLocks, heldLock } from '../../src/mmk/lock-holder.js';
+import {
+  environmentLock,
+  environmentLocks,
+  formatAge,
+  heldLock,
+} from '../../src/mmk/lock-holder.js';
 import type { ProjectSnapshot } from '../../src/mmk/store.js';
 
 // Local times, so the clock times read the same in every time zone.
-const NOW = new Date(2026, 9, 18, 10, 40);
+const NOW = new Date(2026, 9, 18, 10, 36);
 const ACQUIRED = new Date(2026, 9, 18, 10, 32).toISOString();
-const EXPIRES = new Date(2026, 9, 18, 10, 41).toISOString();
+const EXPIRES = new Date(2026, 9, 18, 10, 37).toISOString();
 
 const HOLDER = {
-  lockedAt: new Date(2026, 9, 18, 10, 40).toISOString(),
+  lockedAt: new Date(2026, 9, 18, 10, 36).toISOString(),
   pid: 4242,
   host: 'deploy-runner-7',
   executedBy: 'ci',
@@ -48,11 +53,16 @@ function project(lock: WireLockStatus | null, runningOn: string | null = null): 
 }
 
 describe('heldLock', () => {
-  it('should word the holder mmk reported, since when, and when it frees itself', () => {
+  it('should word the holder mmk reported, since when, for how long and when it frees itself', () => {
     expect(heldLock(HELD, NOW)).toEqual({
-      holder: 'ci on deploy-runner-7 (pid 4242)',
+      user: 'ci',
+      who: 'ci on deploy-runner-7',
+      process: 'pid 4242',
+      since: '10:32',
+      age: '4 min',
+      frees: '10:37',
       summary: 'Locked by ci on deploy-runner-7 (pid 4242) since 10:32',
-      expires: 'If that run crashed, the lock frees itself at 10:41',
+      expires: 'If that run crashed, the lock frees itself by 10:37',
     });
   });
 
@@ -69,17 +79,18 @@ describe('heldLock', () => {
       NOW,
     );
 
-    expect(lock?.summary).toBe(
-      'Locked by ci on deploy-runner-7 (pid 4242), namespace "billing-api" since 17 Oct 23:05',
-    );
+    expect(lock?.process).toBe('pid 4242, namespace "billing-api"');
+    expect(lock?.since).toBe('17 Oct 23:05');
+    expect(lock?.age).toBe('11 h 31 min');
   });
 
   it('should use when it was locked, and say nothing about expiry, for a pre-1.5 holder', () => {
     const { acquiredAt: _acquired, expiresAt: _expires, ...old } = HOLDER;
 
-    expect(heldLock({ holder: old, stale: false }, NOW)).toEqual({
-      holder: 'ci on deploy-runner-7 (pid 4242)',
-      summary: 'Locked by ci on deploy-runner-7 (pid 4242) since 10:40',
+    expect(heldLock({ holder: old, stale: false }, NOW)).toMatchObject({
+      since: '10:36',
+      age: 'just now',
+      frees: '',
       expires: '',
     });
   });
@@ -92,9 +103,23 @@ describe('heldLock', () => {
   });
 });
 
+describe('formatAge', () => {
+  it.each([
+    [-5_000, 'just now'],
+    [59_000, 'just now'],
+    [4 * 60_000, '4 min'],
+    [2 * 3_600_000, '2 h'],
+    [2 * 3_600_000 + 5 * 60_000, '2 h 5 min'],
+    [26 * 3_600_000, '1 day'],
+    [3 * 86_400_000, '3 days'],
+  ])('should show %d ms as %j', (ms, text) => {
+    expect(formatAge(ms)).toBe(text);
+  });
+});
+
 describe('environmentLock', () => {
   it("should show another run's lock", () => {
-    expect(environmentLock(project(HELD), 'local', NOW)?.summary).toContain('Locked by ci');
+    expect(environmentLock(project(HELD), 'local', NOW)?.who).toBe('ci on deploy-runner-7');
     expect(environmentLocks(project(HELD), [{ name: 'local' }, { name: 'prod' }], NOW)).toEqual({
       local: heldLock(HELD, NOW),
       prod: null,
