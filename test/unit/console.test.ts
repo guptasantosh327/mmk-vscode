@@ -101,6 +101,8 @@ describe('buildConsole', () => {
   it('should count pending and attention per environment from mmk verdicts', () => {
     const model = buildConsole(input());
 
+    expect(model.tabs.map((tab) => tab.hue)).toEqual(['green', 'yellow', 'red']);
+
     expect(
       model.tabs.map((tab) => [tab.name, tab.readOnly, tab.selected, tab.pending, tab.attention]),
     ).toEqual([

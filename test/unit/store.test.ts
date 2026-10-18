@@ -262,6 +262,49 @@ describe('MmkStore', () => {
     expect(store.snapshot(DIR)?.running).toBeNull();
   });
 
+  it("should tell finish listeners how each run ended, with mmk's message hidden of credentials", async () => {
+    let fail = false;
+    const mmk = fakeMmk({
+      config: () => CONFIG,
+      status: () => [],
+      up: () => {
+        if (fail) {
+          throw new MmkCommandError(
+            {
+              code: 'CONNECTION_FAILED',
+              message: 'Could not connect to mongodb://alice:s3cret@db.example.com',
+            },
+            ['up'],
+            1,
+            '',
+          );
+        }
+        return [];
+      },
+    });
+    const store = new MmkStore({ log: quiet, run: mmk.run });
+    store.setProjects([ready()]);
+    await store.idle();
+    const runs: unknown[] = [];
+    store.onDidFinishRun((dir, run) => runs.push([dir, run]));
+
+    await store.run(DIR, ['up'], 'up 0001-a.js');
+    fail = true;
+    await expect(store.run(DIR, ['up'], 'up')).rejects.toThrow();
+
+    expect(runs).toEqual([
+      [DIR, { label: 'up 0001-a.js', environment: 'local', failure: null }],
+      [
+        DIR,
+        {
+          label: 'up',
+          environment: 'local',
+          failure: 'Could not connect to mongodb://***:***@db.example.com',
+        },
+      ],
+    ]);
+  });
+
   it('should find the project and status row for a file in its migrations folder only', async () => {
     const mmk = fakeMmk({ config: () => CONFIG, status: () => [PENDING_ROW] });
     const store = new MmkStore({ log: quiet, run: mmk.run });

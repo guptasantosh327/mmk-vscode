@@ -22,7 +22,7 @@ import { parseStatusRows } from '../../mmk/contract.js';
 import type { WireStatusRow } from '../../mmk/contract.js';
 import type { Environment } from '../../mmk/environments.js';
 import { type MatrixInput, buildMatrix, matrixInputs } from '../../mmk/matrix.js';
-import type { ProjectSnapshot } from '../../mmk/store.js';
+import type { FinishedRun, ProjectSnapshot } from '../../mmk/store.js';
 
 /** Where the compared files come from */
 type Source = { kind: 'branch' } | { kind: 'ref'; ref: string };
@@ -67,8 +67,21 @@ export interface ConsoleView {
   /** The picked migration's CLI command, as Copy CLI command would copy it */
   cli: string;
   drawer: DrawerView | null;
-  /** A command running in this project now, from anywhere, with mmk's output so far (C7) */
-  running: { label: string; environment: string; lines: string[] } | null;
+  /**
+   * The last command run in this project, from anywhere, with mmk's output (C7). It stays after
+   * it ends, finished or failed, until the user closes it.
+   */
+  run: RunView | null;
+}
+
+/** A command mmk is running, or ran, in this project */
+export interface RunView {
+  label: string;
+  environment: string;
+  lines: string[];
+  state: 'running' | 'done' | 'failed';
+  /** mmk's error as is, when it failed */
+  message: string | null;
 }
 
 /**
@@ -108,6 +121,7 @@ export function registerConsole(deps: Deps, extensionUri: vscode.Uri): vscode.Di
       }
     }),
     deps.store.onDidOutput((dir, line) => panels.get(dir)?.output(line)),
+    deps.store.onDidFinishRun((dir, run) => panels.get(dir)?.finished(run)),
     { dispose: () => [...panels.values()].map((panel) => panel.dispose()) },
   ];
 }
@@ -137,9 +151,8 @@ export class ConsolePanel implements vscode.Disposable {
   private redrawTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
   private drawer: Drawer | null = null;
-  /** mmk's output of the command running in this project, and which command that is */
-  private lines: string[] = [];
-  private linesOf: string | null = null;
+  /** The last command run in this project, kept until the user closes it */
+  private run: RunView | null = null;
 
   constructor(
     private readonly deps: Deps,
@@ -190,20 +203,51 @@ export class ConsolePanel implements vscode.Disposable {
 
   /** A line of mmk's output from the command running in this project */
   output(line: string): void {
-    const running = this.deps.store.snapshot(this.dir)?.running ?? null;
-    if (running !== this.linesOf) {
-      this.lines = [];
-      this.linesOf = running;
+    this.startRun();
+    if (this.run?.state !== 'running') {
+      return;
     }
-    this.lines.push(line);
-    if (this.lines.length > OUTPUT_LINES) {
-      this.lines.splice(0, this.lines.length - OUTPUT_LINES);
+    this.run.lines.push(line);
+    if (this.run.lines.length > OUTPUT_LINES) {
+      this.run.lines.splice(0, this.run.lines.length - OUTPUT_LINES);
     }
-    this.storeChanged();
+    this.redraw();
+  }
+
+  /** A command in this project ended: keep it on screen, finished or failed */
+  finished(run: FinishedRun): void {
+    if (this.run?.state === 'running' && this.run.label === run.label) {
+      this.run.state = run.failure === null ? 'done' : 'failed';
+      this.run.message = run.failure;
+      this.redraw();
+    }
   }
 
   /** The store read something new: redraw (only the branch view follows it live) */
   storeChanged(): void {
+    this.startRun();
+    this.redraw();
+  }
+
+  /** Follow a command that has just started in this project */
+  private startRun(): void {
+    const project = this.deps.store.snapshot(this.dir);
+    if (
+      !project?.running ||
+      (this.run?.state === 'running' && this.run.label === project.running)
+    ) {
+      return;
+    }
+    this.run = {
+      label: project.running,
+      environment: project.runningOn ?? this.deps.store.selected().name,
+      lines: [],
+      state: 'running',
+      message: null,
+    };
+  }
+
+  private redraw(): void {
     if (this.redrawTimer) {
       clearTimeout(this.redrawTimer);
     }
@@ -273,6 +317,9 @@ export class ConsolePanel implements vscode.Disposable {
         return this.rollBack(message.batch);
       case 'closeDrawer':
         this.drawer = null;
+        if (this.run?.state !== 'running') {
+          this.run = null;
+        }
         this.post();
         return undefined;
       case 'unlock': {
@@ -299,6 +346,9 @@ export class ConsolePanel implements vscode.Disposable {
   private async plan(): Promise<PlanStep[] | undefined> {
     const environment = this.deps.store.selected().name;
     this.drawer = { kind: 'plan', environment, loading: true, steps: [], error: null };
+    if (this.run?.state !== 'running') {
+      this.run = null;
+    }
     this.post();
     let drawer: Drawer;
     try {
@@ -387,6 +437,7 @@ export class ConsolePanel implements vscode.Disposable {
     const after = this.deps.store.snapshot(this.dir)?.environments[input.environment]?.rows ?? null;
     const result = buildResult({ ...input, after });
     this.drawer = { kind: 'result', result };
+    this.run = null;
     this.post();
     return result;
   }
@@ -568,14 +619,7 @@ export class ConsolePanel implements vscode.Disposable {
       model,
       cli: model.detail ? this.cli(selected, model.detail.cli) : '',
       drawer: this.drawerView(project, files),
-      running:
-        project?.running && project.runningOn
-          ? {
-              label: project.running,
-              environment: project.runningOn,
-              lines: project.running === this.linesOf ? [...this.lines] : [],
-            }
-          : null,
+      run: this.run ? { ...this.run, lines: [...this.run.lines] } : null,
     };
   }
 

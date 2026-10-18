@@ -4,13 +4,17 @@ import { MmkCommandError, runMmkJson } from '../mmk/cli.js';
 import { parseStatusRows } from '../mmk/contract.js';
 import {
   type Connection,
+  ENVIRONMENT_HUES,
   type Environment,
+  type EnvironmentHue,
   LOCAL_ENVIRONMENT,
   connectionEnv,
   connectionStringProblem,
   databaseFromUri,
+  environmentHue,
   environmentNameProblem,
   hostLabel,
+  statusBarBackground,
 } from '../mmk/environments.js';
 import type { ProjectSnapshot } from '../mmk/store.js';
 import { type Deps, databaseLabel, resolveProject } from './context.js';
@@ -41,7 +45,90 @@ export function registerEnvironmentCommands(deps: Deps): vscode.Disposable[] {
     vscode.commands.registerCommand('mmk.removeEnvironment', (name?: unknown) =>
       removeEnvironment(deps, typeof name === 'string' ? name : undefined),
     ),
+    vscode.commands.registerCommand('mmk.setEnvironmentColor', (target?: unknown, hue?: unknown) =>
+      setEnvironmentColor(deps, environmentNameOf(deps, target), isHue(hue) ? hue : undefined),
+    ),
   ];
+}
+
+/** The environment a command argument names: a name, or the tree's environment row (the selected one) */
+function environmentNameOf(deps: Deps, target: unknown): string | undefined {
+  if (typeof target === 'string') {
+    return target;
+  }
+  if (typeof target === 'object' && target !== null && 'kind' in target && target.kind === 'env') {
+    return deps.store.selected().name;
+  }
+  return undefined;
+}
+
+function isHue(value: unknown): value is EnvironmentHue {
+  return ENVIRONMENT_HUES.some((hue) => hue === value);
+}
+
+const HUE_LABELS: Record<EnvironmentHue, string> = {
+  green: 'Green',
+  blue: 'Blue',
+  purple: 'Purple',
+  yellow: 'Yellow',
+  orange: 'Orange',
+  red: 'Red',
+};
+
+/**
+ * Set an environment's colour (local's too) in `mmk.environments`: the one it's drawn in, in the
+ * sidebar, the console and the status bar. Returns the colour, or undefined when cancelled.
+ */
+async function setEnvironmentColor(
+  deps: Deps,
+  name?: string,
+  chosen?: EnvironmentHue,
+): Promise<EnvironmentHue | undefined> {
+  let environment = name === undefined ? undefined : deps.store.environment(name);
+  if (!environment) {
+    const picked = await vscode.window.showQuickPick(
+      deps.store.environments().map((candidate) => ({
+        label: candidate.name,
+        description: HUE_LABELS[environmentHue(candidate.color)],
+        environment: candidate,
+      })),
+      { title: 'mmk: Change environment colour' },
+    );
+    environment = picked?.environment;
+  }
+  if (!environment) {
+    return undefined;
+  }
+  const current = environmentHue(environment.color);
+  const hue =
+    chosen ??
+    (
+      await vscode.window.showQuickPick(
+        ENVIRONMENT_HUES.map((candidate) => {
+          const background = statusBarBackground(candidate);
+          return {
+            label: HUE_LABELS[candidate],
+            description: [
+              candidate === current ? 'current' : '',
+              background === 'default' ? '' : `status bar: ${background} background`,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            hue: candidate,
+          };
+        }),
+        {
+          title: `mmk: Colour for ${environment.name}`,
+          placeHolder: 'Shown in the sidebar, the console and the status bar',
+        },
+      )
+    )?.hue;
+  if (!hue) {
+    return undefined;
+  }
+  await deps.environments.writeEntry({ name: environment.name, color: hue });
+  deps.environments.load();
+  return hue;
 }
 
 async function selectByName(deps: Deps, name: string): Promise<string | undefined> {
@@ -110,7 +197,9 @@ function environmentNote(
   const statuses = projects.map((project) => project.environments[environment.name]);
   const parts: string[] = [];
   if (environment.readOnly) {
-    parts.push(environment.color === 'error' ? 'read-only · protected' : 'read-only');
+    parts.push(
+      statusBarBackground(environment.color) === 'error' ? 'read-only · protected' : 'read-only',
+    );
   }
   if (statuses.length > 0 && statuses.every((status) => status && !status.connected)) {
     parts.push('not set up: run "mmk: Edit environment…"');
@@ -359,6 +448,7 @@ async function editEnvironment(deps: Deps, name?: string): Promise<void> {
   const action = await vscode.window.showQuickPick(
     [
       { label: '$(key) Change connection string…', id: 'connection' },
+      { label: '$(symbol-color) Change colour…', id: 'color' },
       environment.readOnly
         ? { label: '$(unlock) Allow runs…', id: 'writable' }
         : { label: '$(lock) Make read-only', id: 'readOnly' },
@@ -385,6 +475,8 @@ async function editEnvironment(deps: Deps, name?: string): Promise<void> {
         `Saved ${environment.name}'s connection for ${path.basename(project.dir)} in the OS keychain.`,
       );
     }
+  } else if (action?.id === 'color') {
+    await setEnvironmentColor(deps, environment.name);
   } else if (action?.id === 'readOnly') {
     await deps.environments.writeEntry({ name: environment.name, readOnly: true });
   } else if (action?.id === 'writable') {

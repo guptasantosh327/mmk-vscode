@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { type Deps, databaseLabel, relativeDir } from '../commands/context.js';
 import type { WireStatusRow } from '../mmk/contract.js';
-import type { Environment } from '../mmk/environments.js';
+import { type Environment, environmentHue } from '../mmk/environments.js';
 import {
   type BatchGroup,
   type StatusModel,
@@ -274,15 +274,9 @@ function projectItem(dir: string, project: ProjectSnapshot | undefined): vscode.
   return item;
 }
 
-/** The theme color of an environment's dot: blue for the default, amber or red otherwise */
+/** The theme colour of an environment's dot: its own, from VS Code's chart colours */
 function environmentColor(environment: Environment): vscode.ThemeColor {
-  return new vscode.ThemeColor(
-    environment.color === 'error'
-      ? 'testing.iconFailed'
-      : environment.color === 'warning'
-        ? 'list.warningForeground'
-        : 'charts.blue',
-  );
+  return new vscode.ThemeColor(`charts.${environmentHue(environment.color)}`);
 }
 
 function envItem(project: ProjectSnapshot | undefined, environment: Environment): vscode.TreeItem {

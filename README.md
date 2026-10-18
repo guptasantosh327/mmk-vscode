@@ -67,7 +67,10 @@ whatever it shows, `npx mmk` says the same in a terminal.
 - **Read-only by default.** Anything but `local` only ever runs `status`, `list` and `dry-run`. The
   run links offer *Dry run* and *Copy CLI command*, and every write command refuses in code, not
   just in the UI. Deploys stay with your pipeline.
-- **The status bar** turns amber on staging and red on prod.
+- **Each environment has its own colour** in the sidebar, the console and the status bar: local
+  green, prod red, the others yellow, blue, purple and orange in turn. Change one with
+  *mmk: Change environment colour…* (or the colour button on its card in the sidebar). The status
+  bar turns amber for yellow and orange, red for red.
 - **The migration console** (`mmk: Open migration console`, or the table icon in the mmk view):
   every migration against every database in one editor tab. Pick an environment, filter to
   *Pending*, *Needs attention* or *Only differences* (with notes like "On staging, not prod"), and
@@ -111,7 +114,7 @@ It needs **mongo-migrate-kit 1.5.0 or later**; with an older one it asks you to 
 
 | Setting | Default | What it does |
 |---|---|---|
-| `mmk.environments` | `[]` | Your environments besides `local`: names, `readOnly` (on unless `false`) and `color` (`default`, `warning`, `error`). Connection strings stay in the keychain. |
+| `mmk.environments` | `[]` | Your environments besides `local`: names, `readOnly` (on unless `false`) and `color` (`green`, `blue`, `purple`, `yellow`, `orange` or `red`; an entry for `local` sets its colour). Connection strings stay in the keychain. |
 | `mmk.nodePath` | empty | The Node.js that runs mmk. Empty means `node` from `PATH`, like your terminal. |
 
 ## Privacy

@@ -158,6 +158,28 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
     await api.idle();
   });
 
+  test("changes an environment's colour, keeping the rest of its settings entry", async () => {
+    const [before] = api.pipeline.view().projects;
+    assert.deepEqual(
+      before?.model.steps.map((step) => [step.name, step.hue]),
+      [
+        ['local', 'green'],
+        ['staging', 'yellow'],
+      ],
+    );
+
+    assert.equal(
+      await vscode.commands.executeCommand('mmk.setEnvironmentColor', 'staging', 'purple'),
+      'purple',
+    );
+    assert.deepEqual(vscode.workspace.getConfiguration('mmk').get('environments'), [
+      { name: 'staging', readOnly: true, color: 'purple' },
+    ]);
+    assert.equal(api.store.environment('staging')?.color, 'purple');
+    const [after] = api.pipeline.view().projects;
+    assert.equal(after?.model.steps[1]?.hue, 'purple');
+  });
+
   test('shows the other environment next to the run links on local', async () => {
     assert.deepEqual(await runLinks(EMAIL_INDEX), [
       'Pending on local',
@@ -352,6 +374,14 @@ suite('Environments (C1, C2) in the fixture workspace', () => {
       [[BACKFILL, 'applied']],
     );
     await api.idle();
+
+    // The run stays on screen, finished, until it's closed.
+    const run = panel.view().run;
+    assert.equal(run?.state, 'done');
+    assert.equal(run?.environment, 'local');
+    assert.match(run?.label ?? '', /^up /);
+    await panel.receive({ type: 'closeDrawer' });
+    assert.equal(panel.view().run, null);
 
     view = panel.view();
     const row = view.model.rows.find((candidate) => candidate.file === BACKFILL);

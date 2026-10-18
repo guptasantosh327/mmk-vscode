@@ -7,18 +7,20 @@ import {
   connectionStringProblem,
   databaseFromUri,
   defaultColor,
+  environmentHue,
   environmentNameProblem,
   hostLabel,
   isReadCommand,
   localEnvironment,
   parseEnvironmentSettings,
   parseStoredConnection,
+  statusBarBackground,
 } from '../../src/mmk/environments.js';
 
 describe('parseEnvironmentSettings', () => {
-  it('should always start with local, writable and with the default color', () => {
+  it('should always start with local, writable and green', () => {
     expect(parseEnvironmentSettings(undefined)).toEqual({
-      environments: [{ name: 'local', readOnly: false, color: 'default', local: true }],
+      environments: [{ name: 'local', readOnly: false, color: 'green', local: true }],
       problems: [],
       leaked: [],
     });
@@ -32,10 +34,30 @@ describe('parseEnvironmentSettings', () => {
     ]);
 
     expect(environments).toEqual([
-      { name: 'local', readOnly: false, color: 'default', local: true },
-      { name: 'staging', readOnly: true, color: 'warning', local: false },
-      { name: 'prod', readOnly: true, color: 'error', local: false },
+      { name: 'local', readOnly: false, color: 'green', local: true },
+      { name: 'staging', readOnly: true, color: 'yellow', local: false },
+      { name: 'prod', readOnly: true, color: 'red', local: false },
       { name: 'dev-cluster', readOnly: false, color: 'default', local: false },
+    ]);
+  });
+
+  it('should give environments without a colour different ones, skipping colours already taken', () => {
+    const { environments } = parseEnvironmentSettings([
+      { name: 'staging', color: 'blue' },
+      { name: 'qa' },
+      { name: 'uat' },
+      { name: 'prod-eu' },
+      { name: 'local', color: 'purple' },
+      { name: 'demo' },
+    ]);
+
+    expect(environments.map((environment) => [environment.name, environment.color])).toEqual([
+      ['local', 'purple'],
+      ['staging', 'blue'],
+      ['qa', 'yellow'],
+      ['uat', 'orange'],
+      ['prod-eu', 'red'],
+      ['demo', 'yellow'],
     ]);
   });
 
@@ -57,17 +79,17 @@ describe('parseEnvironmentSettings', () => {
       { name: 'Prod Cluster' },
       { name: 'staging' },
       { name: 'staging', readOnly: false },
-      { name: 'qa', color: 'purple' },
+      { name: 'qa', color: 'pink' },
     ]);
 
     expect(environments.map((environment) => environment.name)).toEqual(['local', 'staging', 'qa']);
     expect(environments[1]?.readOnly).toBe(true);
-    expect(environments[2]?.color).toBe('warning');
+    expect(environments[2]?.color).toBe('blue');
     expect(problems).toEqual([
       'Entry 1 of "mmk.environments" has no "name", so it was skipped. Each entry looks like { "name": "staging" }.',
       expect.stringContaining('Environment "Prod Cluster" was skipped'),
       'Environment "staging" is listed twice; the first entry is used.',
-      'Environment "qa": "color" should be "default", "warning" or "error", so its default is used.',
+      'Environment "qa": "color" should be green, blue, purple, yellow, orange or red, so its default is used.',
     ]);
   });
 
@@ -104,14 +126,37 @@ describe('parseEnvironmentSettings', () => {
 
 describe('defaultColor', () => {
   it.each([
-    ['local', 'default'],
-    ['staging', 'warning'],
-    ['qa', 'warning'],
-    ['prod', 'error'],
-    ['production-eu', 'error'],
-    ['live', 'error'],
+    ['local', 'green'],
+    ['staging', 'yellow'],
+    ['qa', 'yellow'],
+    ['prod', 'red'],
+    ['production-eu', 'red'],
+    ['live', 'red'],
   ])('%s → %s', (name, color) => {
     expect(defaultColor(name)).toBe(color);
+  });
+
+  it('should pick the next colour no other environment has', () => {
+    expect(defaultColor('qa', ['green', 'yellow'])).toBe('blue');
+    expect(defaultColor('qa', ['yellow', 'blue', 'purple', 'orange'])).toBe('yellow');
+    expect(defaultColor('prod', ['red'])).toBe('red');
+  });
+});
+
+describe('environmentHue and statusBarBackground', () => {
+  it.each([
+    ['green', 'green', 'default'],
+    ['blue', 'blue', 'default'],
+    ['purple', 'purple', 'default'],
+    ['yellow', 'yellow', 'warning'],
+    ['orange', 'orange', 'warning'],
+    ['red', 'red', 'error'],
+    ['default', 'blue', 'default'],
+    ['warning', 'yellow', 'warning'],
+    ['error', 'red', 'error'],
+  ] as const)('%s is drawn %s, with the %s status bar background', (color, hue, background) => {
+    expect(environmentHue(color)).toBe(hue);
+    expect(statusBarBackground(color)).toBe(background);
   });
 });
 

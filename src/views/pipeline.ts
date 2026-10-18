@@ -97,6 +97,8 @@ export class PipelineProvider implements vscode.WebviewViewProvider, vscode.Disp
         return vscode.commands.executeCommand('mmk.createMigration');
       case 'addEnvironment':
         return vscode.commands.executeCommand('mmk.addEnvironment');
+      case 'color':
+        return vscode.commands.executeCommand('mmk.setEnvironmentColor', message.name);
     }
   }
 

@@ -24,6 +24,13 @@ import { type ConfigReaders, readProjectConfig } from './project-config.js';
 import type { ProjectState } from './project.js';
 import { redactMongoUri } from './redact.js';
 
+/** A command {@link MmkStore.run} ran: its label, where, and mmk's error when it failed */
+export interface FinishedRun {
+  label: string;
+  environment: string;
+  failure: string | null;
+}
+
 /** Why the last read of a project failed. `message` is mmk's own when mmk reported it */
 export interface ReadFailure {
   message: string;
@@ -141,6 +148,7 @@ export class MmkStore {
   private readonly entries = new Map<string, Entry>();
   private readonly listeners = new Set<() => void>();
   private readonly outputListeners = new Set<(dir: string, line: string) => void>();
+  private readonly finishListeners = new Set<(dir: string, run: FinishedRun) => void>();
   private readonly runMmk: RunMmk;
   private readonly readers: ConfigReaders;
   private readonly connection: ConnectionLookup;
@@ -280,6 +288,15 @@ export class MmkStore {
   }
 
   /**
+   * Call `listener` when a command started by {@link MmkStore.run} ends, with mmk's error message
+   * (credentials hidden) when it failed. Returns a disposable.
+   */
+  onDidFinishRun(listener: (dir: string, run: FinishedRun) => void): { dispose: () => void } {
+    this.finishListeners.add(listener);
+    return { dispose: () => this.finishListeners.delete(listener) };
+  }
+
+  /**
    * Read config and status again, now. Resolves when reads that started after this call have
    * finished. Without `dir`, refreshes every project; without `environment`, every environment.
    */
@@ -385,6 +402,7 @@ export class MmkStore {
     this.log.info(
       `$ ${describeCommand([...args, '--json'])}    (in ${dir}${environment.local ? '' : `, on ${environment.name}`})`,
     );
+    let failure: string | null = null;
     try {
       return await this.runMmk(state.invocation, args, {
         env: connectionEnv(connection),
@@ -396,7 +414,13 @@ export class MmkStore {
           }
         },
       });
+    } catch (error) {
+      failure = redactMongoUri(error instanceof Error ? error.message : String(error));
+      throw error;
     } finally {
+      for (const listener of this.finishListeners) {
+        listener(dir, { label, environment: environment.name, failure });
+      }
       this.update(entry, { running: null, runningOn: null });
       void this.request(entry, environment.name);
     }

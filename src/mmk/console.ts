@@ -1,6 +1,6 @@
 import type { RunResult } from 'mongo-migrate-kit';
 import type { Wire, WireStatusRow } from './contract.js';
-import type { Environment } from './environments.js';
+import { type Environment, type EnvironmentHue, environmentHue } from './environments.js';
 import type { CellState, MatrixColumn, MatrixModel, MatrixRow } from './matrix.js';
 import { buildStatusModel, formatDuration, formatWhen } from './model.js';
 import { displayName } from './naming.js';
@@ -109,6 +109,8 @@ export interface ConsoleInput {
 /** One environment tab */
 export interface ConsoleTab {
   name: string;
+  /** Its colour, from `mmk.environments` or its default */
+  hue: EnvironmentHue;
   readOnly: boolean;
   selected: boolean;
   state: MatrixColumn['state'];
@@ -265,6 +267,7 @@ export function buildConsole(input: ConsoleInput): ConsoleModel {
     const column = input.matrix.columns.find((candidate) => candidate.name === environment.name);
     return {
       name: environment.name,
+      hue: environmentHue(environment.color),
       readOnly: environment.readOnly,
       selected: environment.name === name,
       state: column?.state ?? 'loading',

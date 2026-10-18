@@ -39,7 +39,7 @@
 
   function step(item) {
     const state = item.state === 'ok' ? `${item.pending} pending` : null;
-    return el('li', { class: `step${item.selected ? ' selected' : ''}` }, [
+    return el('li', { class: `step hue-${item.hue}${item.selected ? ' selected' : ''}` }, [
       el('span', { class: 'node', 'aria-hidden': 'true' }),
       el(
         'button',
@@ -52,7 +52,7 @@
         },
         [
           el('span', { class: 'card-head' }, [
-            icon(item.readOnly ? 'lock' : 'circle-filled'),
+            el('span', { class: 'env-icon' }, [icon(item.readOnly ? 'lock' : 'circle-filled')]),
             el('span', { class: 'name', text: item.name }),
             el('span', { class: 'muted small', text: item.readOnly ? 'read-only' : 'writable' }),
             el('span', { class: 'spacer' }),
@@ -71,6 +71,17 @@
               ])
             : null,
         ],
+      ),
+      el(
+        'button',
+        {
+          type: 'button',
+          class: 'icon-button color-button',
+          title: `Change ${item.name}'s colour…`,
+          'aria-label': `Change ${item.name}'s colour`,
+          onclick: () => send({ type: 'color', name: item.name }),
+        },
+        [icon('symbol-color')],
       ),
     ]);
   }
@@ -141,8 +152,6 @@
     return el('section', { class: 'project', 'aria-label': entry.title }, [
       many ? el('h2', { text: entry.title }) : null,
       el('ol', { class: 'pipeline', 'aria-label': 'Environments' }, model.steps.map(step)),
-      el('h3', { text: `Pending on ${model.selected}` }),
-      pendingList(entry),
       el('div', { class: 'actions' }, [
         model.pending > 0
           ? el(
@@ -170,6 +179,8 @@
           ]),
         ]),
       ]),
+      el('h3', { text: `Pending on ${model.selected}` }),
+      pendingList(entry),
     ]);
   }
 

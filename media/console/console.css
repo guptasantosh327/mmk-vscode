@@ -160,9 +160,42 @@ button.link:hover {
   color: var(--vscode-panelTitle-activeForeground);
 }
 
-.tab .codicon-circle-filled {
-  color: var(--vscode-testing-iconPassed);
+/* Each environment's colour: VS Code's chart colours, which every theme defines */
+.hue-green {
+  --hue: var(--vscode-charts-green);
+}
+
+.hue-blue {
+  --hue: var(--vscode-charts-blue);
+}
+
+.hue-purple {
+  --hue: var(--vscode-charts-purple);
+}
+
+.hue-yellow {
+  --hue: var(--vscode-charts-yellow);
+}
+
+.hue-orange {
+  --hue: var(--vscode-charts-orange);
+}
+
+.hue-red {
+  --hue: var(--vscode-charts-red);
+}
+
+.env-icon {
+  display: inline-flex;
+  color: var(--hue, var(--vscode-foreground));
+}
+
+.env-icon .codicon-circle-filled {
   font-size: 10px;
+}
+
+.tab[aria-selected="true"] {
+  border-bottom-color: var(--hue, var(--vscode-panelTitle-activeBorder));
 }
 
 .badge {

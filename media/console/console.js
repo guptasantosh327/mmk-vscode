@@ -52,6 +52,12 @@
     vscode.postMessage(message);
   }
 
+  /** An environment's colour, from its tab */
+  function hueOf(name) {
+    const tab = view.model.tabs.find((candidate) => candidate.name === name);
+    return tab ? tab.hue : 'blue';
+  }
+
   /** The selected environment could be read: its counts and batches mean something */
   function readable() {
     const tab = view.model.tabs.find((candidate) => candidate.selected);
@@ -90,13 +96,13 @@
         {
           type: 'button',
           role: 'tab',
-          class: 'tab',
+          class: `tab hue-${tab.hue}`,
           'aria-selected': String(tab.selected),
           title: column ? column.title : tab.name,
           onclick: () => send({ type: 'environment', name: tab.name }),
         },
         [
-          icon(tab.readOnly ? 'lock' : 'circle-filled'),
+          el('span', { class: 'env-icon' }, [icon(tab.readOnly ? 'lock' : 'circle-filled')]),
           el('span', { text: tab.name }),
           tab.state === 'error' ? icon('error') : null,
           tab.state === 'not-set-up' ? icon('key') : null,
@@ -201,22 +207,30 @@
   }
 
   // The panel over the console: a run in progress (C7), a plan (C6) or a result (C8)
+  // A run in progress can't be closed; anything else closes with Close, Escape or the backdrop
+  function busy() {
+    return Boolean(view.run && view.run.state === 'running');
+  }
+
   function drawer() {
-    const running = view.running;
+    const run = view.run;
     const item = view.drawer;
-    if (!running && !item) return null;
     let body;
-    if (running || item.kind === 'applying') {
-      body = runningDrawer(running, item);
-    } else if (item.kind === 'plan') {
-      body = planDrawer(item);
-    } else {
+    if (item && item.kind === 'result') {
       body = resultDrawer(item.result);
+    } else if (busy() || (item && item.kind === 'applying')) {
+      body = runDrawer(run, item ? item.environment : '');
+    } else if (item && item.kind === 'plan') {
+      body = planDrawer(item);
+    } else if (run) {
+      body = runDrawer(run, run.environment);
+    } else {
+      return null;
     }
     return el('div', { class: 'overlay' }, [
       el('div', {
         class: 'backdrop',
-        onclick: () => (running ? null : send({ type: 'closeDrawer' })),
+        onclick: () => (busy() ? null : send({ type: 'closeDrawer' })),
       }),
       body,
     ]);
@@ -245,27 +259,72 @@
     ]);
   }
 
-  function runningDrawer(running, item) {
-    const label = running ? running.label : 'up';
-    const environment = running ? running.environment : item.environment;
-    const lines = running ? running.lines : [];
-    return el('aside', { class: 'drawer', role: 'dialog', 'aria-label': `Running ${label}` }, [
-      drawerHead(
-        'sync codicon-modifier-spin',
-        'info',
-        `Running ${label} on ${environment}`,
-        'mmk holds the lock until it ends',
-        false,
-      ),
-      el('div', { class: 'drawer-body' }, [
-        el('h3', { text: "mmk's output, as it comes" }),
-        el('pre', { class: 'output', text: lines.length > 0 ? lines.join('\n') : 'Starting…' }),
-        el('p', {
-          class: 'muted small',
-          text: "There's no Stop: halting a migration midway could leave data half-changed. You can close this tab; the run carries on.",
-        }),
-      ]),
-    ]);
+  // A command mmk runs (C7): live while it runs, then kept with how it ended until closed
+  function runDrawer(run, fallbackEnvironment) {
+    const label = run ? run.label : 'up';
+    const environment = run ? run.environment : fallbackEnvironment;
+    const lines = run ? run.lines : [];
+    const state = run ? run.state : 'running';
+    const head =
+      state === 'running'
+        ? drawerHead(
+            'sync codicon-modifier-spin',
+            'info',
+            `Running ${label} on ${environment}`,
+            'mmk holds the lock until it ends',
+            false,
+          )
+        : state === 'done'
+          ? drawerHead(
+              'pass',
+              'ok',
+              `Finished ${label} on ${environment}`,
+              'mmk ran it without an error',
+              true,
+            )
+          : drawerHead(
+              'error',
+              'failed',
+              `${label} failed on ${environment}`,
+              "mmk's error is below, as it wrote it",
+              true,
+            );
+    const footer =
+      state === 'running'
+        ? null
+        : el('div', { class: 'drawer-foot' }, [
+            state === 'failed'
+              ? button('Show output', 'output', () => send({ type: 'showOutput' }))
+              : null,
+            button('Close', null, () => send({ type: 'closeDrawer' }), { class: 'primary' }),
+          ]);
+    return el(
+      'aside',
+      { class: 'drawer', role: 'dialog', 'aria-label': `${label} on ${environment}` },
+      [
+        head,
+        el('div', { class: 'drawer-body' }, [
+          run?.message ? el('pre', { class: 'mmk-message', text: run.message }) : null,
+          el('h3', { text: state === 'running' ? "mmk's output, as it comes" : "mmk's output" }),
+          el('pre', {
+            class: 'output',
+            text:
+              lines.length > 0
+                ? lines.join('\n')
+                : state === 'running'
+                  ? 'Starting…'
+                  : 'mmk wrote nothing else.',
+          }),
+          state === 'running'
+            ? el('p', {
+                class: 'muted small',
+                text: "There's no Stop: halting a migration midway could leave data half-changed. You can close this tab; the run carries on.",
+              })
+            : null,
+        ]),
+        footer,
+      ],
+    );
   }
 
   function planDrawer(plan) {
@@ -444,7 +503,12 @@
             class: column.name === view.selected ? 'current' : '',
             title: column.title,
           },
-          [el('span', { text: column.name }), column.readOnly ? icon('lock') : null],
+          [
+            el('span', { text: column.name }),
+            el('span', { class: `env-icon hue-${hueOf(column.name)}` }, [
+              icon(column.readOnly ? 'lock' : 'circle-filled'),
+            ]),
+          ],
         ),
       ),
       el('th', { scope: 'col', text: diff ? 'Note' : `Last run on ${view.selected}` }),
@@ -635,9 +699,9 @@
     }
   }
 
-  // Escape closes a plan or a result (never a run in progress)
+  // Escape closes a plan, a result or a finished run (never a run in progress)
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && view && view.drawer && !view.running) {
+    if (event.key === 'Escape' && view && (view.drawer || view.run) && !busy()) {
       send({ type: 'closeDrawer' });
     }
   });

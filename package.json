@@ -213,6 +213,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "mmk.setEnvironmentColor",
+        "title": "Change environment colour…",
+        "category": "mmk",
+        "icon": "$(symbol-color)"
+      },
+      {
         "command": "mmk.showAppliedVersion",
         "title": "Show applied version",
         "category": "mmk",
@@ -333,6 +339,11 @@
           "command": "mmk.selectEnvironment",
           "when": "view == mmk.migrations && viewItem == mmk.env",
           "group": "inline@2"
+        },
+        {
+          "command": "mmk.setEnvironmentColor",
+          "when": "view == mmk.migrations && viewItem == mmk.env",
+          "group": "3_env@1"
         }
       ],
       "commandPalette": [
@@ -389,6 +400,10 @@
           "when": "mmk.hasProject"
         },
         {
+          "command": "mmk.setEnvironmentColor",
+          "when": "mmk.hasProject"
+        },
+        {
           "command": "mmk.editEnvironment",
           "when": "mmk.hasProject"
         },
@@ -435,7 +450,7 @@
           "type": "array",
           "default": [],
           "scope": "window",
-          "markdownDescription": "Databases to compare your branch with, besides `local` (this project's own config and `.env`). Only names, read-only flags and colors go here: each connection string stays in the OS keychain. Add one with **mmk: Add environment…**.",
+          "markdownDescription": "Databases to compare your branch with, besides `local` (this project's own config and `.env`), and each one's read-only flag and colour (an entry for `local` sets its colour). Each connection string stays in the OS keychain. Add one with **mmk: Add environment…**.",
           "items": {
             "type": "object",
             "required": [
@@ -457,16 +472,28 @@
               "color": {
                 "type": "string",
                 "enum": [
+                  "green",
+                  "blue",
+                  "purple",
+                  "yellow",
+                  "orange",
+                  "red",
                   "default",
                   "warning",
                   "error"
                 ],
                 "enumDescriptions": [
-                  "The default status bar background",
-                  "The warning background (staging by default)",
-                  "The error background (anything named like prod by default)"
+                  "Green (local by default)",
+                  "Blue",
+                  "Purple",
+                  "Yellow, with the warning status bar background (the first other environment by default)",
+                  "Orange, with the warning status bar background",
+                  "Red, with the error status bar background (anything named like prod by default)",
+                  "Blue (the first value this setting had)",
+                  "Yellow (the first value this setting had)",
+                  "Red (the first value this setting had)"
                 ],
-                "description": "The status bar background while this environment is selected."
+                "markdownDescription": "The environment's colour in the sidebar, the migration console and the status bar. Without one, each environment gets a different colour. Set it with **mmk: Change environment colour…**."
               }
             }
           }

@@ -127,11 +127,6 @@ button.link:hover {
   z-index: 1;
 }
 
-.step.selected .node {
-  border-color: var(--vscode-focusBorder);
-  background: var(--vscode-focusBorder);
-}
-
 .card {
   display: flex;
   flex: 1;
@@ -152,7 +147,6 @@ button.link:hover {
 }
 
 .card[aria-pressed="true"] {
-  border-color: var(--vscode-focusBorder);
   background: var(--vscode-list-inactiveSelectionBackground);
 }
 
@@ -166,9 +160,74 @@ button.link:hover {
   font-weight: 600;
 }
 
-.card-head .codicon-circle-filled {
-  color: var(--vscode-testing-iconPassed);
+/* Each environment's colour: VS Code's chart colours, which every theme defines */
+.hue-green {
+  --hue: var(--vscode-charts-green);
+}
+
+.hue-blue {
+  --hue: var(--vscode-charts-blue);
+}
+
+.hue-purple {
+  --hue: var(--vscode-charts-purple);
+}
+
+.hue-yellow {
+  --hue: var(--vscode-charts-yellow);
+}
+
+.hue-orange {
+  --hue: var(--vscode-charts-orange);
+}
+
+.hue-red {
+  --hue: var(--vscode-charts-red);
+}
+
+.env-icon {
+  display: inline-flex;
+  color: var(--hue, var(--vscode-foreground));
+}
+
+.env-icon .codicon-circle-filled {
   font-size: 10px;
+}
+
+.step .node {
+  border-color: var(--hue, var(--vscode-descriptionForeground));
+}
+
+.step.selected .node {
+  border-color: var(--hue, var(--vscode-focusBorder));
+  background: var(--hue, var(--vscode-focusBorder));
+}
+
+.step.selected .card {
+  border-color: var(--hue, var(--vscode-focusBorder));
+}
+
+/* Shown on hover or keyboard focus, beside the card (a button can't hold another) */
+.color-button {
+  position: absolute;
+  right: 4px;
+  bottom: 12px;
+  opacity: 0;
+}
+
+.step:hover .color-button,
+.color-button:focus-visible {
+  opacity: 1;
+}
+
+.icon-button {
+  padding: 2px 4px;
+  color: var(--vscode-icon-foreground);
+  background: none;
+}
+
+.icon-button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
 }
 
 .line {

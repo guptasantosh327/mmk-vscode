@@ -101,6 +101,16 @@ describe('buildPipeline', () => {
     ]);
   });
 
+  it("should draw each environment in its own colour, the setting's first values included", () => {
+    const model = buildPipeline(INPUTS, 'local', NOW);
+
+    expect(model.steps.map((step) => [step.name, step.hue])).toEqual([
+      ['local', 'green'],
+      ['staging', 'yellow'],
+      ['prod', 'red'],
+    ]);
+  });
+
   it("should list the selected environment's pending migrations, with each environment's state", () => {
     const model = buildPipeline(INPUTS, 'prod', NOW);
 
@@ -171,6 +181,7 @@ describe('isPipelineMessage', () => {
       { type: 'console', dir: '/work/api' },
       { type: 'create' },
       { type: 'addEnvironment' },
+      { type: 'color', name: 'staging' },
     ]) {
       expect(isPipelineMessage(message), JSON.stringify(message)).toBe(true);
     }
@@ -180,6 +191,7 @@ describe('isPipelineMessage', () => {
       { type: 'select' },
       { type: 'pick', dir: '/work/api' },
       { type: 'review', dir: 1 },
+      { type: 'color' },
     ]) {
       expect(isPipelineMessage(message), JSON.stringify(message)).toBe(false);
     }

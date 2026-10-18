@@ -1,4 +1,5 @@
 import type { WireStatusRow } from './contract.js';
+import { type EnvironmentHue, environmentHue } from './environments.js';
 import type { CellState, MatrixInput, MatrixModel } from './matrix.js';
 import { buildMatrix } from './matrix.js';
 import { formatDay, formatWhen } from './model.js';
@@ -10,6 +11,8 @@ const SHOWN_PENDING = 5;
 /** One environment as a step of the pipeline (design B) */
 export interface PipelineStep {
   name: string;
+  /** Its colour, from `mmk.environments` or its default */
+  hue: EnvironmentHue;
   readOnly: boolean;
   selected: boolean;
   state: 'ok' | 'error' | 'not-set-up' | 'loading';
@@ -83,6 +86,7 @@ export function buildPipeline(
     );
     const base = {
       name,
+      hue: environmentHue(input.environment.color),
       readOnly: input.environment.readOnly,
       selected: name === selected,
       state: input.state,
@@ -185,7 +189,8 @@ export type PipelineMessage =
   | { type: 'pick'; dir: string; file: string }
   | { type: 'console'; dir: string }
   | { type: 'create' }
-  | { type: 'addEnvironment' };
+  | { type: 'addEnvironment' }
+  | { type: 'color'; name: string };
 
 /**
  * True for a message the pipeline's webview may send, checked field by field: the webview draws
@@ -202,6 +207,7 @@ export function isPipelineMessage(value: unknown): value is PipelineMessage {
     case 'addEnvironment':
       return true;
     case 'select':
+    case 'color':
       return typeof message.name === 'string';
     case 'review':
     case 'console':

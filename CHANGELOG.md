@@ -18,8 +18,18 @@ All notable changes to this extension are documented here.
 - **Roll back a batch** (`mmk: Roll back a batch…`, `mmk down --batch N`): the confirmation names
   every migration in the batch. Refused on read-only environments.
 - **Environments pipeline** at the top of the mmk sidebar: each environment as a step with its
-  pending count, the latest migration applied there and what needs attention, then the selected
-  environment's pending migrations and *Review N pending*.
+  pending count, the latest migration applied there and what needs attention, then *Review N
+  pending*, *Console* and *New migration*, then the selected environment's pending migrations.
+- **Environment colours:** each environment has its own colour in the sidebar, the console and the
+  status bar, and a different one by default (local green, prod red, the others yellow, blue,
+  purple and orange in turn). *mmk: Change environment colour…* sets it, local's too, in
+  `mmk.environments` (`green`, `blue`, `purple`, `yellow`, `orange`, `red`; `default`, `warning`
+  and `error` still work). Yellow and orange give the status bar its warning background, red its
+  error one.
+- A run in the console stays on screen when it ends, finished or failed with mmk's error, until
+  you close it.
+- Fixed: *Edit environment → Make read-only* (or *Allow runs*) no longer drops the environment's
+  colour from settings.
 - An environment that can't be read shows mmk's message as is, with *Try again*, *Edit
   connection* and *Show output*.
 

@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   type Connection,
+  type EnvironmentColor,
   type EnvironmentSettings,
   LOCAL_ENVIRONMENT,
   type LeakedConnection,
@@ -22,7 +23,7 @@ const SELECTED_KEY = 'mmk.selectedEnvironment';
 export interface EnvironmentEntry {
   name: string;
   readOnly?: boolean;
-  color?: 'default' | 'warning' | 'error';
+  color?: EnvironmentColor;
 }
 
 /**
@@ -97,10 +98,21 @@ export class EnvironmentRegistry implements vscode.Disposable {
     return Array.isArray(value) ? value : [];
   }
 
-  /** Add or replace an entry in the workspace's `mmk.environments` */
+  /**
+   * Add an entry to the workspace's `mmk.environments`, or change the fields `entry` names in the
+   * existing one, keeping its other fields and its place in the list.
+   */
   async writeEntry(entry: EnvironmentEntry): Promise<void> {
-    const others = this.entries().filter((existing) => entryName(existing) !== entry.name);
-    await this.writeEntries([...others, entry]);
+    const entries = this.entries();
+    const index = entries.findIndex((existing) => entryName(existing) === entry.name);
+    const current = entries[index];
+    if (index === -1 || typeof current !== 'object' || current === null) {
+      await this.writeEntries([...entries.filter((_, at) => at !== index), entry]);
+      return;
+    }
+    await this.writeEntries(
+      entries.map((existing, at) => (at === index ? { ...current, ...entry } : existing)),
+    );
   }
 
   /** Remove an entry from the workspace's `mmk.environments` */
