@@ -39,8 +39,8 @@ whatever it shows, `npx mmk` says the same in a terminal.
 
 - **The environments pipeline** at the top of the mmk sidebar: local → staging → prod, each with
   its pending count, the migration applied there last and anything that needs attention (or
-  mmk's error, when it can't be read). Below it, the selected environment's pending migrations
-  and *Review N pending*, which opens the console's plan.
+  mmk's error, when it can't be read). Below it, *Review N pending* (the console's plan),
+  *Console* and *New migration*, then the selected environment's pending migrations.
 - **The mmk sidebar:** what's pending, what was edited after it ran, and what's applied, grouped by
   batch. *Apply all* and *Dry run* sit next to the pending list.
 - **Create a migration** with the `+`: type a name, see the file mmk will create, pick JavaScript or
@@ -57,9 +57,24 @@ whatever it shows, `npx mmk` says the same in a terminal.
 - **Nothing runs on its own.** Every run is a click; rolling back, redoing and releasing the lock
   ask first. *Copy CLI command* gives you the same command for a terminal.
 
+## Edits to migrations that already ran
+
+![Editing an applied migration, then opening the version that ran](media/readme/applied-edit.gif)
+
+Changing a migration after it ran is the classic mistake: the databases keep what the old `up()`
+did, and a rollback runs the new `down()`. The extension catches it **while you type**, before
+you save:
+
+- A warning on the changed lines, saying where it ran, plus a Problems entry, a `!` badge and a
+  run link.
+- **Show applied version** finds the commit whose file matches the checksum mmk recorded and
+  opens it next to yours. **Restore applied version** puts it back.
+
+This needs mongo-migrate-kit 1.6.0 or later, which reports the checksum each migration ran with.
+
 ## Staging and prod
 
-![Switching to prod (read-only), then comparing every environment](media/readme/environments.gif)
+![Switching to prod (read-only), then the migration console on what differs](media/readme/environments.gif)
 
 - **Add an environment** (`mmk: Add environment…`): a name, the connection string in a masked box,
   and the database. The connection is tested with `mmk status`, then kept in your **OS keychain**.
@@ -81,19 +96,11 @@ whatever it shows, `npx mmk` says the same in a terminal.
 - **After a branch switch**, local migrations whose files are on another branch are named, with
   the branch.
 
-**The database user for staging and prod:** mongo-migrate-kit 1.5 creates the changelog's index
-whenever it connects, even to read, so the user needs permission to write (for example
-`readWrite`). The extension still never runs a write command on a read-only environment.
-
-## Coming with the next mongo-migrate-kit
-
-These are built into the extension and switch on by themselves once your project has a
-mongo-migrate-kit release that supports them. Until then they stay off:
-
-- **A warning while you edit a migration that already ran**, before you save, plus **Show applied
-  version**, which opens the version that ran (found in git) next to yours. It needs `mmk status`
-  to report the checksum each migration ran with.
-- **Database users with only the `read` role** for staging and prod.
+**The database user for staging and prod:** with mongo-migrate-kit 1.6.0 or later, a user with
+only the `read` role is enough, because reading never writes. mongo-migrate-kit 1.5 creates the
+changelog's index whenever it connects, even to read, so there the user needs permission to write
+(for example `readWrite`). Either way, the extension never runs a write command on a read-only
+environment.
 
 ## Requirements
 
@@ -108,7 +115,8 @@ work too: the extension runs next to your project.
 ### Which mongo-migrate-kit
 
 It needs **mongo-migrate-kit 1.5.0 or later**; with an older one it asks you to update
-(`npm install --save-dev mongo-migrate-kit@latest`).
+(`npm install --save-dev mongo-migrate-kit@latest`). **1.6.0 or later** adds the warning on edits
+to migrations that already ran and read-only database users; on 1.5 those two stay off.
 
 ## Settings
 

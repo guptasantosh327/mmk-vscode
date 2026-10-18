@@ -137,10 +137,13 @@ async function run() {
     await settle();
     await frame('environments/2', 2600);
 
-    // ── C2: the matrix ─────────────────────────────────────────────────────────────────────
-    await exec('mmk.compareEnvironments', { dir: workspace });
+    // ── C2–C4: the console on what differs, then one migration on every environment ───────
+    const panel = await exec('mmk.compareEnvironments', { dir: workspace });
     await settle(2500);
-    await frame('environments/3', 3500);
+    await frame('environments/3', 3000);
+    await panel.receive({ type: 'pick', file: '20261012091500-backfill-order-status.js' });
+    await settle(1500);
+    await frame('environments/4', 3500);
     await exec('mmk.selectEnvironment', 'local');
     await closeAll();
     await clearNotifications();

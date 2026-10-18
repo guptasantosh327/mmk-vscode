@@ -2,7 +2,7 @@
   "name": "mongo-migrate-kit",
   "displayName": "Mongo Migrate Kit",
   "description": "Run, roll back and compare mongo-migrate-kit MongoDB migrations from the editor, with a warning when you edit one that already ran",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "guptasantosh327",
   "license": "MIT",
   "author": "Santosh Gupta",

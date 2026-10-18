@@ -258,15 +258,15 @@ matching commit's version.
   with the BOM put back when the file on disk has one: reading the file's first bytes replaces
   `TextDocument.encoding`, which `engines.vscode ^1.90` doesn't have. `checksum.contract.test.ts`
   checks LF, CRLF, BOM, BOM + CRLF and non-ASCII files against the checksum mmk wrote, read
-  from the changelog directly (so it runs on 1.5 too), and against `StatusRow.checksum` on the
-  next mmk.
+  from the changelog directly (so it runs on 1.5 too), and against `StatusRow.checksum` from
+  mmk 1.6.
 - Every environment's rows are compared, not only the selected one: the warning names each
   environment whose recorded checksum differs (`src/mmk/applied-edits.ts`).
 - The changed range is the diff against the file on disk while that is still the version that
   ran (an unsaved edit), otherwise against the version found in git. Until git answers, it's the
   line of `up()`.
-- With an mmk that reports no checksums (1.5), nothing warns; editing an applied file says once
-  per project that a newer mongo-migrate-kit adds the warning.
+- With an mmk that reports no checksums (1.5), nothing warns. mongo-migrate-kit 1.6.0 reports
+  them (R5), and the warning switches on by itself.
 - The applied version is found with one `git log --follow --name-only` and one
   `git cat-file --batch` over every version of the file. The newest commit whose content hashes
   to the recorded checksum wins, so a pure rename commit counts as that version.

@@ -2,7 +2,22 @@
 
 All notable changes to this extension are documented here.
 
-## Unreleased
+## 1.1.0 · unreleased
+
+The first release as **Mongo Migrate Kit**: a migration console, an environments pipeline in the
+sidebar, and what mongo-migrate-kit 1.6.0 adds. It still works with mongo-migrate-kit 1.5.0.
+(1.0.1, the rename alone, was never published; it's part of this release.)
+
+### Renamed
+
+- **Mongo Migrate Kit**, the library's name, with a new extension ID:
+  `guptasantosh327.mongo-migrate-kit`. It replaces `guptasantosh327.mmk-vscode` ("mmk for VS
+  Code"), which is no longer updated: uninstall it and install this one. Settings (`mmk.*`) and
+  commands are unchanged; environments' connection strings need adding again, since the keychain
+  keeps them per extension.
+- The README opens like mongo-migrate-kit's: the logo, badges and links to its docs.
+
+### Added
 
 - **Migration console** (`mmk: Open migration console`): every migration against every
   environment in one editor tab, with environment tabs, filters (*Pending*, *Needs attention*,
@@ -14,7 +29,8 @@ All notable changes to this extension are documented here.
 - **Plan, run and result in the console:** *Plan* shows mmk's dry run (what up would apply, in
   order) and *Apply* runs it. While mmk runs in the project, its own output shows as it comes. The
   result lists each migration, mmk's error as is when it stops, where the environment stands now,
-  and the next step (open the file, roll back the batch, release a held lock).
+  and the next step (open the file, roll back the batch, release a held lock). It stays on screen,
+  finished or failed, until you close it.
 - **Roll back a batch** (`mmk: Roll back a batch…`, `mmk down --batch N`): the confirmation names
   every migration in the batch. Refused on read-only environments.
 - **Environments pipeline** at the top of the mmk sidebar: each environment as a step with its
@@ -26,25 +42,32 @@ All notable changes to this extension are documented here.
   `mmk.environments` (`green`, `blue`, `purple`, `yellow`, `orange`, `red`; `default`, `warning`
   and `error` still work). Yellow and orange give the status bar its warning background, red its
   error one.
-- A run in the console stays on screen when it ends, finished or failed with mmk's error, until
-  you close it.
+- An environment that can't be read shows mmk's message as is, with *Try again*, *Edit
+  connection* and *Show output*.
+
+### With mongo-migrate-kit 1.6.0
+
+On by themselves once a project has mongo-migrate-kit 1.6.0 or later:
+
+- **The warning while you edit a migration that already ran**, and **Show applied version**:
+  mmk 1.6 reports the checksum each migration ran with.
+- **Database users with only the `read` role** for staging and prod: mmk 1.6 reads without
+  writing.
+- The project's settings come from `mmk config --json`, so its migrations show even before it has
+  a connection string.
+- When a run stops partway, the console's result lists what ran before it from mmk's own error.
+
+### Changed
+
 - Runs no longer pop up a notification when they succeed (up, down, redo, *Apply all*, rolling
   back a batch), and their progress shows in the status bar: the sidebar, run links and status bar
   already show the result. A failure still shows mmk's message, and a run that did nothing says
   why.
-- Fixed: *Edit environment → Make read-only* (or *Allow runs*) no longer drops the environment's
-  colour from settings.
-- An environment that can't be read shows mmk's message as is, with *Try again*, *Edit
-  connection* and *Show output*.
 
-## 1.0.1 · unreleased
+### Fixed
 
-- **Renamed to Mongo Migrate Kit**, the library's name, with a new extension ID:
-  `guptasantosh327.mongo-migrate-kit`. It replaces `guptasantosh327.mmk-vscode` ("mmk for VS
-  Code"), which is no longer updated: uninstall it and install this one. Settings (`mmk.*`) and
-  commands are unchanged; environments' connection strings need adding again, since the keychain
-  keeps them per extension.
-- The README opens like mongo-migrate-kit's: the logo, badges and links to its docs.
+- *Edit environment → Make read-only* (or *Allow runs*) no longer drops the environment's colour
+  from settings.
 
 ## 1.0.0 · 2026-10-18
 

@@ -5,7 +5,8 @@ the need goes here. Each request is **designed and built in MMK_REPO**
 (`/Users/santoshgupta/Desktop/development/mongo-migrate-kit`) in its own Claude session, following
 that repo's CLAUDE.md, with its own tests, changelog entry and release.
 
-**Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Once a request is released,
+**Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Released in 1.6.0: R2, R3, R5,
+R8, R9 and R10. Once a request is released,
 raise `MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
 
 **Developing against the unreleased requests:** each one is on its own branch in MMK_REPO. To
@@ -40,10 +41,9 @@ them instead of declaring them (`src/mmk/contract.ts` declares these three for n
 
 ---
 
-## R2 — Resolved config as JSON · Phase 2 (optional) · `in progress`
+## R2 — Resolved config as JSON · Phase 2 (optional) · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/config-json` (commit `d5925d1`, not pushed,
-not released) as `mmk config [--json]`, `MigratorKit.describeConfig()` and the exported
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #12, from branch `feat/config-json`), as `mmk config [--json]`, `MigratorKit.describeConfig()` and the exported
 `ConfigSummary` / `ConfigSource` types. It never connects, hides the URI's credentials, and
 reports `null` for an unset `uri` / `dbName` / `configFile`.
 
@@ -51,8 +51,8 @@ reports `null` for an unset `uri` / `dbName` / `configFile`.
 (1.5's public `MigratorKit.resolveConfig()`, CLAUDE.md rule 1), and it switches to
 `mmk config --json` on any mmk that has it. What R2 still adds: the config can be read without a
 connection string, it names where each value came from, and the extension needs no library
-call. When it's released, pin that version, import `ConfigSummary` instead of the local
-`ProjectConfig`, and change the contract test that expects `via: 'library'`. Don't raise
+call. The contract test already expects `via: 'cli'` from 1.6. Still to do once 1.6.0 is pinned
+(docs/RELEASE.md, step 2): import `ConfigSummary` instead of the local `ProjectConfig`. Don't raise
 `MIN_MMK_VERSION` for it.
 
 **Why:** the extension needs the resolved migrations folder, file extensions and create defaults.
@@ -82,10 +82,11 @@ it works without a database.
 
 ---
 
-## R3 — Read commands never write on connect · Phase 3 · `in progress`
+## R3 — Read commands never write on connect · Phase 3 · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/read-only-reads` (commit `3a5b2d6`, not
-pushed, not released) as `connect({ readOnly: true })` (exported `ConnectOptions`), used by
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #13, from branch `feat/read-only-reads`, with
+the owner's `fb8b2af`: a write command run by a user that can't write now fails with
+`CONNECTION_FAILED` at its first write, the storage marker included), as `connect({ readOnly: true })` (exported `ConnectOptions`), used by
 `status`, `list`, `dry-run`, `status --all-namespaces`, `lockInfo()` and `pendingMigrations()`.
 Write commands still create the changelog index on connect. Tested with an auth-enabled memory
 server and a `read`-role user (library and CLI). The extension's contract test
@@ -125,13 +126,12 @@ Existing functions that take no argument keep working.
 
 ---
 
-## R5 — Recorded checksum in status output · Phase 4 · `in progress`
+## R5 — Recorded checksum in status output · Phase 4 · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/status-checksum` (commit `1c4589a`, not
-pushed, not released) as `StatusRow.checksum` on applied rows of `status`, `list` and `dry-run`
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #14, from branch `feat/status-checksum`), as `StatusRow.checksum` on applied rows of `status`, `list` and `dry-run`
 (omitted when a record has none, e.g. an `mmk import` without its file), with a shape test.
-Until it's released, `src/mmk/contract.ts` adds the field in `WireStatusRow`; once pinned,
-that becomes plain `Wire<StatusRow>`.
+`src/mmk/contract.ts` adds the field in `WireStatusRow` so the code compiles against 1.5's types;
+once 1.6.0 is pinned (docs/RELEASE.md, step 2), that becomes plain `Wire<StatusRow>`.
 
 **Why:** to warn while someone edits an applied file, and to find the version that ran in git, the
 extension needs the **recorded** checksum. `StatusRow` only has `checksumOk`.
@@ -190,24 +190,26 @@ without a name.
 
 ---
 
-## R8 — Docs page for the extension · Phase 6 · `in progress`
+## R8 — Docs page for the extension · Phase 6 · `released in mmk 1.6.0`
 
-**Status:** written on mongo-migrate-kit branch `feat/vscode-docs` (commit `309ef38`, not pushed,
-not released) as `docs/guide/vscode.md` ("In VS Code" in the guide's sidebar): install,
-environments, read-only users, applied-file warnings, rollback tests, lint and the compatibility
-table. It names 1.6.0 as the release with R3/R5.
+**Status:** released with mongo-migrate-kit 1.6.0 (PR #15, from branch `feat/vscode-docs`) as
+`docs/guide/vscode.md` ("In VS Code" in the guide's sidebar): install, environments, read-only
+users, applied-file warnings and the compatibility table. It names 1.6.0 as the release with
+R3/R5. The docs site deploys from `main`, so it's live at
+https://mongo-migrate-kit.vercel.app/guide/vscode. **Follow-up, after the extension's 1.1.0 is
+published** (docs/RELEASE.md, step 4): it still uses the old name and ID (`mmk for VS Code`,
+`guptasantosh327.mmk-vscode`) and predates the console, the pipeline and environment colours.
 
 **Proposal:** a page in MMK_REPO `docs/` (VitePress) covering install, environments, read-only users,
 and the compatibility table.
 
 ---
 
-## R9 — Keep stdout to the JSON document in `--json` mode · Phase 2 (optional) · `in progress`
+## R9 — Keep stdout to the JSON document in `--json` mode · Phase 2 (optional) · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/json-output` (commit `905f178`, not pushed,
-not released). Checked through `file:../mongo-migrate-kit`: the only contract test that changes is
-"stdout from user code", whose `otherStdout` becomes `''`. When it's released, update that test.
-Keep the tolerant parser in `parseJsonStdout`, because older mmk versions still leak.
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #11, from branch `feat/json-output`). The
+contract test "stdout from user code" expects `otherStdout` to be `''` from 1.6, and the 1.5 leak
+below it. Keep the tolerant parser in `parseJsonStdout`, because 1.5 still leaks.
 
 **Why:** found in Phase 1. `--json` promises one JSON document on stdout, but mmk only routes its
 *own* logger to stderr. A `console.log` in a migration, a hook or a config function still goes to
@@ -225,12 +227,13 @@ the command, and write the JSON document through the original stdout.
 
 ---
 
-## R10 — Results of the files that ran, when a run fails · Phase 2 (optional) · `in progress`
+## R10 — Results of the files that ran, when a run fails · Phase 2 (optional) · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/json-output` (commit `6f7041e`, not pushed,
-not released). The contract tests still pass against it. Covers `up`, `down` and `redo` (the revert
-comes first), and the library's `err.context.results`. When it's released, add `details.results`
-to the contract test for `MIGRATION_EXECUTION_FAILED` and read it in the A3 notification.
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #11, from branch `feat/json-output`). Covers
+`up`, `down` and `redo` (the revert comes first), and the library's `err.context.results`. The
+console's result reads it (`runResultsOfFailure`), and the contract test "a run that stops
+partway" checks `details.results` from 1.6 (none on 1.5). The A3 notification it was first meant
+for was dropped (owner, 2026-10-18).
 
 **Why:** found in Phase 1. When `mmk up --json` applies two files and the third throws, mmk prints
 only the error document. The results of the two files that did apply are dropped, so the A3
