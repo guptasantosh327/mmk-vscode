@@ -36,7 +36,7 @@ async function run() {
   const workspace = vscode.workspace.workspaceFolders[0].uri.fsPath;
   const migrations = path.join(workspace, 'migrations');
   const file = (name) => vscode.Uri.file(path.join(migrations, name));
-  const api = await vscode.extensions.getExtension('guptasantosh327.mmk-vscode').activate();
+  const api = await vscode.extensions.getExtension('guptasantosh327.mongo-migrate-kit').activate();
   api.setConfirm(() => true);
   const settle = async (ms = 1200) => {
     await api.idle();

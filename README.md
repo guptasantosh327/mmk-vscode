@@ -1,10 +1,34 @@
-# mmk for VS Code
+<div align="center">
 
-Create, run and roll back [mongo-migrate-kit](https://mongo-migrate-kit.vercel.app/) (mmk)
-MongoDB migrations without leaving the editor. Compare your branch with staging and prod, and get a
-warning the moment you edit a migration that has already run.
+<img src="media/icon.png" alt="Mongo Migrate Kit" width="128" />
 
-![Creating a migration, running it on local, and seeing it applied](media/readme/local-workflow.gif)
+# Mongo Migrate Kit for VS Code
+
+**[mongo-migrate-kit](https://mongo-migrate-kit.vercel.app/) in your editor: create, run, roll back
+and compare MongoDB migrations.**
+
+[![VS Code Marketplace](https://badgen.net/vs-marketplace/v/guptasantosh327.mongo-migrate-kit?style=flat&color=1E9E57&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=guptasantosh327.mongo-migrate-kit)
+[![Open VSX](https://img.shields.io/open-vsx/v/guptasantosh327/mongo-migrate-kit?style=flat-square&color=1E9E57&label=Open%20VSX)](https://open-vsx.org/extension/guptasantosh327/mongo-migrate-kit)
+[![mongo-migrate-kit 1.5.0 or later](https://img.shields.io/badge/mongo--migrate--kit-%E2%89%A5%201.5.0-1E9E57?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/mongo-migrate-kit)
+[![License: MIT](https://img.shields.io/badge/License-MIT-1E9E57?style=flat-square)](https://opensource.org/licenses/MIT)
+
+**[mongo-migrate-kit docs](https://mongo-migrate-kit.vercel.app/guide/)** ·
+**[Quick start](https://mongo-migrate-kit.vercel.app/guide/getting-started)** ·
+**[Changelog](CHANGELOG.md)**
+
+<br>
+
+<img src="media/readme/local-workflow.gif" alt="Creating a migration, running it on local, and seeing it applied" width="860" />
+
+<sub>Creating a migration, running it on local, and seeing it applied.</sub>
+
+</div>
+
+---
+
+Create, run and roll back mongo-migrate-kit (mmk) MongoDB migrations without leaving the editor.
+Compare your branch with staging and prod, and get a warning the moment you edit a migration that
+has already run.
 
 The extension is a window onto the `mmk` command. It runs **your project's own** mongo-migrate-kit
 from `node_modules`, with your `mmk.config.*`, your `.env` and your Node.js, and shows what

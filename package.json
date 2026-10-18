@@ -1,8 +1,8 @@
 {
-  "name": "mmk-vscode",
-  "displayName": "mmk for VS Code",
+  "name": "mongo-migrate-kit",
+  "displayName": "Mongo Migrate Kit",
   "description": "Run, roll back and compare mongo-migrate-kit MongoDB migrations from the editor, with a warning when you edit one that already ran",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "guptasantosh327",
   "license": "MIT",
   "author": "Santosh Gupta",
@@ -78,7 +78,7 @@
       {
         "view": "mmk.migrations",
         "when": "mmk.discovered && !mmk.hasProject",
-        "contents": "No mmk project in this workspace.\nmmk for VS Code looks for an mmk.config.js, .ts or .json, or a package.json that depends on mongo-migrate-kit.\n[Read the getting started guide](https://mongo-migrate-kit.vercel.app/guide/getting-started)\n[Refresh](command:mmk.refresh)"
+        "contents": "No mmk project in this workspace.\nThe extension looks for an mmk.config.js, .ts or .json, or a package.json that depends on mongo-migrate-kit.\n[Read the getting started guide](https://mongo-migrate-kit.vercel.app/guide/getting-started)\n[Refresh](command:mmk.refresh)"
       },
       {
         "view": "mmk.migrations",
@@ -88,7 +88,7 @@
       {
         "view": "mmk.migrations",
         "when": "mmk.problem == 'too-old'",
-        "contents": "Update mongo-migrate-kit to 1.5.0 or later.\nThis project has an older version, and mmk for VS Code only reads the output of 1.5.0 or later. Run npm install --save-dev mongo-migrate-kit@latest, then refresh.\n[Refresh](command:mmk.refresh)\n[Show details](command:mmk.showOutput)"
+        "contents": "Update mongo-migrate-kit to 1.5.0 or later.\nThis project has an older version, and the extension only reads the output of 1.5.0 or later. Run npm install --save-dev mongo-migrate-kit@latest, then refresh.\n[Refresh](command:mmk.refresh)\n[Show details](command:mmk.showOutput)"
       },
       {
         "view": "mmk.migrations",

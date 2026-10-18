@@ -1,4 +1,4 @@
-# Design — mmk for VS Code
+# Design — Mongo Migrate Kit for VS Code
 
 **Live mockup:** https://claude.ai/artifact/ShXWe1gdAancBaTcXb3Zsk — page **"VS Code extension"**
 (private to the owner; open it signed in). The page "Web dashboard" is an earlier idea and is

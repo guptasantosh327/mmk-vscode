@@ -390,7 +390,7 @@ describe('MmkStore with environments', () => {
 
     for (const args of [['up'], ['down', '0001-a.js'], ['redo'], ['unlock', '--yes']]) {
       await expect(store.run(DIR, args, args[0] ?? '')).rejects.toThrow(
-        /^staging is read-only, so mmk for VS Code won't run "mmk /,
+        /^staging is read-only, so the extension won't run "mmk /,
       );
     }
     // Naming the environment explicitly makes no difference.

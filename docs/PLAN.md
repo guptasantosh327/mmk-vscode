@@ -1,4 +1,4 @@
-# Plan — mmk for VS Code
+# Plan — Mongo Migrate Kit for VS Code
 
 Six phases. **Each phase ends when its exit criteria pass**: lint, typecheck, unit, contract and
 integration tests are green. At that point, say `PHASE N COMPLETE`, update `CLAUDE.md` §0, and wait

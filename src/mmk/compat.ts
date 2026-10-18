@@ -82,7 +82,7 @@ export function checkCompat(
     return {
       ok: false,
       version: text,
-      message: `Update mongo-migrate-kit to ${minimum} or later. This project has ${text}, and mmk for VS Code only reads the output of ${minimum} or later. Run: npm install --save-dev mongo-migrate-kit@latest`,
+      message: `Update mongo-migrate-kit to ${minimum} or later. This project has ${text}, and the extension only reads the output of ${minimum} or later. Run: npm install --save-dev mongo-migrate-kit@latest`,
     };
   }
   return { ok: true, version: text };

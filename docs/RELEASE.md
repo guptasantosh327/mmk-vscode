@@ -5,22 +5,26 @@ mongo-migrate-kit's next release comes later, after the owner has tested it. The
 update for it: it detects what the project's mmk can do, and the applied-file warning and
 read-only database users switch on by themselves.
 
-## 1. mmk for VS Code 1.0.0 (now)
+## 1. Mongo Migrate Kit 1.0.1: the library's name, a new ID (now)
 
-1. Merge `release/1.0` into `main`. The branches are stacked (`feat/environments` →
-   `feat/applied-file-protection` → `feat/rollback-tests` → `release/1.0`), so it's a
-   fast-forward.
-2. Put the date in `CHANGELOG.md` (`## 1.0.0 · <date>`).
-3. Check that the publisher `guptasantosh327` exists on the
-   [Visual Studio Marketplace](https://marketplace.visualstudio.com/manage) and the namespace on
-   [Open VSX](https://open-vsx.org/), with a token for each.
-4. Push `main` to GitHub **before** publishing: the Marketplace page shows the README's GIFs from
+1.0.0 went out on 2026-10-18 as `guptasantosh327.mmk-vscode` ("mmk for VS Code"), on the VS Code
+Marketplace only. 1.0.1 is the same extension named after the library, with the ID
+`guptasantosh327.mongo-migrate-kit`. A new ID is a new listing, so the old one is retired by hand.
+
+1. Put the date in `CHANGELOG.md` (`## 1.0.1 · <date>`).
+2. Check that the namespace `guptasantosh327` exists on [Open VSX](https://open-vsx.org/), with a
+   token. The Marketplace publisher exists already.
+3. Push `main` to GitHub **before** publishing: the Marketplace page shows the README's images from
    the repository (`vsce` points relative image paths at it).
-5. `npm ci && npm run package`, and install the `.vsix` once to check it
-   (`code --install-extension mmk-vscode-1.0.0.vsix`).
-6. `npx vsce publish` (or `npx vsce publish --packagePath mmk-vscode-1.0.0.vsix`) and
-   `npx ovsx publish mmk-vscode-1.0.0.vsix -p <token>`.
-7. Tag it: `git tag v1.0.0 && git push origin v1.0.0`.
+4. `npm ci && npm run package`, and install the `.vsix` once to check it
+   (`code --install-extension mongo-migrate-kit-1.0.1.vsix`).
+5. `npx vsce publish --packagePath mongo-migrate-kit-1.0.1.vsix` and
+   `npx ovsx publish mongo-migrate-kit-1.0.1.vsix -p <token>`.
+6. Tag it: `git tag v1.0.1 && git push origin v1.0.1`.
+7. Retire `mmk-vscode`: on the [publisher page](https://marketplace.visualstudio.com/manage),
+   **Unpublish** it (it can be published again later), or delete it for good with
+   `npx vsce unpublish guptasantosh327.mmk-vscode`. Copies already installed keep working but get
+   no updates.
 
 ## 2. mongo-migrate-kit's next release (later, after testing it)
 
@@ -42,11 +46,14 @@ other: keep both sides.
 
 **Don't merge** `feat/test-rollback` (R6) or `feat/lint` (R7): both were dropped.
 
+**Before merging `feat/vscode-docs`:** its page, `docs/guide/vscode.md`, must call the extension
+Mongo Migrate Kit and link `guptasantosh327.mongo-migrate-kit`, not the retired `mmk-vscode`.
+
 Then in mongo-migrate-kit: `npm run typecheck && npm run lint && npm test && npm run docs:build`,
 and `npm run release`, picking **minor** (1.6.0). `docs/guide/vscode.md` there names **1.6.0** as
 the version with R3 and R5: if the release gets another number, change it first.
 
-## 3. mmk for VS Code 1.0.x after that release (docs and pinning only)
+## 3. Mongo Migrate Kit 1.0.x after that release (docs and pinning only)
 
 The released extension already works with it. This update only brings the docs and tests in step:
 

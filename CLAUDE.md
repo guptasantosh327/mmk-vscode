@@ -1,4 +1,4 @@
-# CLAUDE.md — mmk for VS Code
+# CLAUDE.md — Mongo Migrate Kit for VS Code
 
 > Read this file **completely** before writing code. It loads every session.
 > The plan is in `docs/PLAN.md`, the design in `design/SCREENS.md`, and the core changes this
@@ -10,8 +10,10 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** **1.0.0 ready to publish** (2026-10-18) on `release/1.0` (stacked on
-  `feat/environments` → `feat/applied-file-protection` → `feat/rollback-tests`), none pushed.
+- **Current phase:** **1.0.1 ready to publish** (2026-10-18): the extension takes the library's
+  name, **Mongo Migrate Kit**, and a new ID, `guptasantosh327.mongo-migrate-kit` (owner's
+  decision). 1.0.0 went out on the VS Code Marketplace as `guptasantosh327.mmk-vscode` ("mmk for
+  VS Code"), which is retired after 1.0.1 ships. In-editor labels stay `mmk`, the CLI's name.
   Phases 3, 4 and 6 are in; Phase 5 (rollback tests, lint) was built and then dropped at the
   owner's request. **Release order (owner's decision):** the extension first, against
   mongo-migrate-kit 1.5.0; mmk's next release later, after the owner tests it. On 1.5 the
@@ -30,9 +32,12 @@
   `feat/read-only-reads`; R5 on `feat/status-checksum`; R8 on `feat/vscode-docs`. R4 (optional)
   isn't built. **R6 and R7 were dropped** (owner, 2026-10-18): their branches `feat/test-rollback`
   and `feat/lint` stay unmerged, and Phase 5 (rollback tests, lint) isn't in the extension.
-- **Before the 1.0 release:** the publisher ID `guptasantosh327` (confirmed) must exist on
-  the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
-  (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
+- **Extension ID:** `guptasantosh327.mongo-migrate-kit` (`publisher`.`name`). The publisher exists
+  on the VS Code Marketplace; Open VSX needs a matching namespace. The ID in tests
+  (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) and
+  `scripts/media/driver.cjs` follows it. `name` matches the devDependency mongo-migrate-kit; npm
+  allows that, and nothing resolves it to the extension itself as long as package.json has no
+  `exports`.
 - **Commits** carry only the owner's name: no Claude co-author trailer.
 - **Test hooks:** `activate()` returns `MmkTestApi` (store, idle, sidebar text, setConfirm,
   environments, checkBranch) only in `ExtensionMode.Test`; integration tests use it to answer the

@@ -2,6 +2,15 @@
 
 All notable changes to this extension are documented here.
 
+## 1.0.1 · unreleased
+
+- **Renamed to Mongo Migrate Kit**, the library's name, with a new extension ID:
+  `guptasantosh327.mongo-migrate-kit`. It replaces `guptasantosh327.mmk-vscode` ("mmk for VS
+  Code"), which is no longer updated: uninstall it and install this one. Settings (`mmk.*`) and
+  commands are unchanged; environments' connection strings need adding again, since the keychain
+  keeps them per extension.
+- The README opens like mongo-migrate-kit's: the logo, badges and links to its docs.
+
 ## 1.0.0 · 2026-10-18
 
 The first release. (0.1.0 was prepared as a pre-release and never published.) It needs

@@ -228,7 +228,7 @@ export class ReadOnlyEnvironmentError extends Error {
 
   constructor(environment: string, args: readonly string[]) {
     super(
-      `${environment} is read-only, so mmk for VS Code won't run "mmk ${args[0] ?? ''}" there. It only runs status, list and dry-run on ${environment}; deploys go through CI. To allow runs, set "readOnly": false for ${environment} in "mmk.environments".`,
+      `${environment} is read-only, so the extension won't run "mmk ${args[0] ?? ''}" there. It only runs status, list and dry-run on ${environment}; deploys go through CI. To allow runs, set "readOnly": false for ${environment} in "mmk.environments".`,
     );
     this.name = 'ReadOnlyEnvironmentError';
     this.environment = environment;

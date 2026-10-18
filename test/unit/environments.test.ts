@@ -204,7 +204,7 @@ describe('read-only enforcement', () => {
 
   it('should say where runs are allowed and how to change it', () => {
     expect(() => assertCanRun(staging, ['up'])).toThrow(
-      'staging is read-only, so mmk for VS Code won\'t run "mmk up" there. It only runs status, list and dry-run on staging; deploys go through CI. To allow runs, set "readOnly": false for staging in "mmk.environments".',
+      'staging is read-only, so the extension won\'t run "mmk up" there. It only runs status, list and dry-run on staging; deploys go through CI. To allow runs, set "readOnly": false for staging in "mmk.environments".',
     );
   });
 
