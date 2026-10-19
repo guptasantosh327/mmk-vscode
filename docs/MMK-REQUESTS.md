@@ -5,16 +5,17 @@ the need goes here. Each request is **designed and built in MMK_REPO**
 (`/Users/santoshgupta/Desktop/development/mongo-migrate-kit`) in its own Claude session, following
 that repo's CLAUDE.md, with its own tests, changelog entry and release.
 
-**Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Released in 1.6.0: R2, R3, R5,
-R8, R9 and R10; R11 is built for 1.6.0 too, waiting to be merged. Once a request is released,
-raise `MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
+**Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Released in 1.6.0
+(2026-10-19, pinned here): R2, R3, R5, R8, R9, R10 and R11. Once a request is released, raise
+`MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
 
 **Developing against the unreleased requests:** each one is on its own branch in MMK_REPO. To
 use them together, merge the branches in a throwaway clone (not in MMK_REPO), set its version to
 `1.6.0-dev.0`, build, `npm pack`, and `npm install --no-save <tarball>` here. The contract
 tests read the installed version: from `NEXT_MMK` (`1.6.0-0`, in `test/contract/harness.ts`)
-they expect the new behaviour, and 1.5 behaviour below it, so CI stays green on the pinned
-1.5.0. `npm ci` puts the pin back.
+they expect the new behaviour, and 1.5 behaviour below it, so CI stays green on 1.5.0, the oldest
+supported version. `npm ci` puts the pin back. For requests after 1.6.0, stamp the build with the
+next version instead.
 
 **Rules for every request:** additive and non-breaking for existing CLI and CI users; output
 covered by shape tests in MMK_REPO, so mmk's own CI fails if a shape changes; documented in
@@ -51,9 +52,8 @@ reports `null` for an unset `uri` / `dbName` / `configFile`.
 (1.5's public `MigratorKit.resolveConfig()`, CLAUDE.md rule 1), and it switches to
 `mmk config --json` on any mmk that has it. What R2 still adds: the config can be read without a
 connection string, it names where each value came from, and the extension needs no library
-call. The contract test already expects `via: 'cli'` from 1.6. Still to do once 1.6.0 is pinned
-(docs/RELEASE.md, step 2): import `ConfigSummary` instead of the local `ProjectConfig`. Don't raise
-`MIN_MMK_VERSION` for it.
+call. The contract test expects `via: 'cli'` from 1.6, and `ProjectConfig` is a `Pick` of
+`ConfigSummary` since 1.6.0 is pinned. Don't raise `MIN_MMK_VERSION` for it.
 
 **Why:** the extension needs the resolved migrations folder, file extensions and create defaults.
 Without this it would have to re-implement mmk's config loading (precedence, `.env`, config
@@ -130,8 +130,7 @@ Existing functions that take no argument keep working.
 
 **Status:** released in mongo-migrate-kit 1.6.0 (PR #14, from branch `feat/status-checksum`), as `StatusRow.checksum` on applied rows of `status`, `list` and `dry-run`
 (omitted when a record has none, e.g. an `mmk import` without its file), with a shape test.
-`src/mmk/contract.ts` adds the field in `WireStatusRow` so the code compiles against 1.5's types;
-once 1.6.0 is pinned (docs/RELEASE.md, step 2), that becomes plain `Wire<StatusRow>`.
+`WireStatusRow` in `src/mmk/contract.ts` is plain `Wire<StatusRow>` since 1.6.0 is pinned.
 
 **Why:** to warn while someone edits an applied file, and to find the version that ran in git, the
 extension needs the **recorded** checksum. `StatusRow` only has `checksumOk`.
@@ -247,13 +246,12 @@ notification can't say "Applied 2 on local, then x.js failed" without running `s
 
 ---
 
-## R11 — Who holds the lock, from a command that doesn't release it · Phase 7 · `in progress`
+## R11 — Who holds the lock, from a command that doesn't release it · Phase 7 · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/lock-command` (commit `8603662`, not pushed,
-not merged) as `mmk lock [--json]`, `MigratorKit.lockStatus()` and the exported `LockStatus`
-type, with tests (lock free, held, stale, a pre-1.5 holder; nothing written; a `read`-role user)
-and docs (`/commands/lock`). The owner holds 1.6.0 for it (2026-10-19), so it ships in 1.6.0. One
-change from the proposal: the output also has `stale`, mmk's verdict on the server's clock, by the
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #16, from branch `feat/lock-command`) as
+`mmk lock [--json]`, `MigratorKit.lockStatus()` and the exported `LockStatus` type
+(`WireLockStatus` is `Wire<LockStatus>`), with tests (lock free, held, stale, a pre-1.5 holder;
+nothing written; a `read`-role user) and docs (`/commands/lock`). One change from the proposal: the output also has `stale`, mmk's verdict on the server's clock, by the
 same filter a run uses to take the lock over, so the extension never judges staleness itself
 (rule 1). The extension reads it in `MmkStore` (`readLock`), shows a lock in force in the
 pipeline, the console, the tree and the status bar, and offers *Release the lock…* on writable

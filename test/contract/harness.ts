@@ -42,10 +42,10 @@ export interface ContractProject {
 
 /**
  * The first mongo-migrate-kit release with the requests this extension made (R2, R3, R5, R9,
- * R10, …), counting its pre-releases: a local build of it reports `1.6.0-dev.N`. Contract tests
- * expect 1.5 behaviour below it and the new behaviour from it, so CI stays green on the pinned
- * 1.5.0 while the requests are developed through an unreleased build. Once that release is
- * pinned, delete the 1.5 branches.
+ * R10, R11), counting its pre-releases: a local build of it reports `1.6.0-dev.N`. It is the pin
+ * now. Contract tests expect the new behaviour from it and 1.5 behaviour below it, because CI
+ * also runs them on 1.5.0, the oldest version the extension supports. Delete the 1.5 branches
+ * when `MIN_MMK_VERSION` (`src/mmk/compat.ts`) is raised to 1.6.0.
  */
 export const NEXT_MMK = '1.6.0-0';
 

@@ -35,7 +35,13 @@ jobs:
       - name: Lint (biome)
         run: npx biome ci src test
 
+      # The extension imports types that the pin exports and 1.5.0 doesn't (ConfigSummary,
+      # LockStatus, StatusRow.checksum), so it typechecks only against the pin; this step covers
+      # src and every test. The other job still lints and runs every test suite, which is what
+      # proves that version works: esbuild, vitest and the integration build (tsc --noCheck)
+      # only transpile.
       - name: Typecheck
+        if: matrix.mmk == 'pinned'
         run: npx tsc --noEmit
 
       - name: Unit tests

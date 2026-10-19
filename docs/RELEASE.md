@@ -7,6 +7,8 @@ mongo-migrate-kit 1.6.0 switches on. It still works with mongo-migrate-kit 1.5.0
 
 ## 1. mongo-migrate-kit 1.6.0 (owner, in MMK_REPO)
 
+**Done:** published to npm on 2026-10-19 (tag `v1.6.0`), with R11 merged (PR #16).
+
 R2, R3, R5, R8, R9 and R10 are in mongo-migrate-kit's `main` (PRs #11–#15); R11 is on its own
 branch (step 1). Checked on `fdd4de3`: typecheck, lint, 622 tests, build and the docs build pass,
 and so do this extension's contract and integration tests against a build of it.
@@ -26,6 +28,9 @@ and so do this extension's contract and integration tests against a build of it.
 The shipped extension contains no mmk: this step changes only types and tests. Do it before
 publishing, so CI proves 1.6 on every push from then on.
 
+**Done (2026-10-19):** pinned, with the imports and the CI change below; every suite passed on
+1.6.0 and on 1.5.0.
+
 ```bash
 npm install --save-dev --save-exact mongo-migrate-kit@1.6.0
 ```
@@ -37,7 +42,9 @@ npm install --save-dev --save-exact mongo-migrate-kit@1.6.0
   - `WireLockStatus` becomes `Wire<LockStatus>` (R11).
 - Those compile only against 1.6's types, so in `.github/workflows/ci.yml` run the **Typecheck**
   step only on the pinned job (`if: matrix.mmk == 'pinned'`). The `1.5.0` job still lints and runs
-  every test suite, which is what proves 1.5 support.
+  every test suite, which is what proves 1.5 support. For that, `pretest:integration` builds the
+  integration tests with `tsc --noCheck` (transpile only, like esbuild and vitest); the Typecheck
+  step covers them.
 - `test/contract/harness.ts`: `NEXT_MMK` is now the pin. Keep the 1.5 branches while
   `MIN_MMK_VERSION` is 1.5.0, and update the comment that says to delete them.
 - Run every suite on the pin, then on 1.5.0 (`npm install --no-save mongo-migrate-kit@1.5.0`),

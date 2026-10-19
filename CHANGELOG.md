@@ -2,7 +2,7 @@
 
 All notable changes to this extension are documented here.
 
-## 1.1.0 · unreleased
+## 1.1.0 
 
 The first release as **Mongo Migrate Kit**: a migration console, an environments pipeline in the
 sidebar, and what mongo-migrate-kit 1.6.0 adds. It still works with mongo-migrate-kit 1.5.0.

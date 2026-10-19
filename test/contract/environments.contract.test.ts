@@ -16,7 +16,7 @@ import { FIXTURE_FILES, FIXTURE_WORKSPACE, REPO_ROOT, hasNextMmk } from './harne
 /**
  * Environments through the extension's own store and the real, pinned mmk: a stored
  * connection is injected as MMK_URI / MMK_DB and wins over the config file and `.env`; a
- * read-only MongoDB user can read (request R3, the next mmk); and read-only environments never
+ * read-only MongoDB user can read (request R3, mmk 1.6); and read-only environments never
  * get a write command, whatever asks for one.
  */
 

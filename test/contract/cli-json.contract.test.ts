@@ -150,7 +150,7 @@ describe('status, list, dry-run, up, down, redo and create', () => {
   it('status: an applied row has its batch, time, duration, checksum verdict and author', async () => {
     const before = Date.now();
     const rows = parseStatusRows((await project().run(['status'])).value, 'status');
-    // R5 (the next mmk): the checksum recorded when it ran, the SHA-256 of the file's text.
+    // R5 (mmk 1.6): the checksum recorded when it ran, the SHA-256 of the file's text.
     const source = readFileSync(path.join(project().migrationsDir, CREATE_USERS), 'utf8');
     const recorded = hasNextMmk()
       ? { checksum: createHash('sha256').update(source).digest('hex') }

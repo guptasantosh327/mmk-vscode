@@ -10,32 +10,31 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **1.1.0 ready to publish** (2026-10-18, branch `feat/console`, stacked on
-  `chore/rename-mongo-migrate-kit`, not pushed). The first release as **Mongo Migrate Kit**, the
+- **1.1.0 ready to publish** (branch `feat/console`, stacked on `chore/rename-mongo-migrate-kit`,
+  pushed, no pull request yet). The first release as **Mongo Migrate Kit**, the
   library's name, with a new ID, `guptasantosh327.mongo-migrate-kit` (owner's decision); 1.0.1,
   the rename alone, was never published. It brings Phase 7 (the migration console and the
   pipeline sidebar, `docs/PLAN.md`) and what mongo-migrate-kit 1.6.0 switches on. 1.0.0 went out
   as `guptasantosh327.mmk-vscode` ("mmk for VS Code"), retired after 1.1.0 ships. In-editor labels
   stay `mmk`, the CLI's name. **Release order (owner, 2026-10-18):** mongo-migrate-kit 1.6.0
-  first, then pin it here (`docs/RELEASE.md` step 2), then publish 1.1.0, then fix mmk's docs
-  page about the extension (R8 follow-up, step 4). The extension still supports 1.5.0: there the
-  applied-file warning, read-only database users and the lock UI stay off. **R11** (`mmk lock`)
-  is built on MMK_REPO branch `feat/lock-command` for 1.6.0 (owner held the release for it,
-  2026-10-19), with the extension's lock UI on `feat/console`. R12 is open, not built. Phase 5
-  (rollback tests, lint) was built and then dropped.
+  (published 2026-10-19), pinned here (done, `docs/RELEASE.md` step 2), then publish 1.1.0
+  (step 3, next), then fix mmk's docs page about the extension (R8 follow-up, step 4). The
+  extension still supports 1.5.0: there the applied-file warning, read-only database users and
+  the lock UI stay off. R12 is open, not built. Phase 5 (rollback tests, lint) was built and then
+  dropped.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
   branches into mmk's `main` in a throwaway clone, stamp it with the next version plus `-dev.0`,
   `npm pack`, then `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
   `test/contract/harness.ts`. `npm ci` puts the pin back; check both before committing.
 - **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
   santosh-lodha, which can read the repo's CI runs but not push).
-- **mmk version the contract tests pin:** 1.5.0, until 1.6.0 is on npm (`docs/RELEASE.md` step
-  2). CI runs every suite on the pin and on `MIN_MMK_VERSION` (1.5.0), and a contract test keeps
-  that matrix and the constant in step.
-- **MMK requests released:** R2, R3, R5, R8, R9 and R10 in mongo-migrate-kit 1.6.0 (PRs
-  #11–#15; the owner publishes it, 2026-10-18). R8's page is live but still names the old
-  extension: fix it after 1.1.0 ships. R11 is built for 1.6.0 on `feat/lock-command`, waiting to
-  be merged. R4 (optional) isn't built. **R6 and R7 were dropped**
+- **mmk version the contract tests pin:** 1.6.0. CI runs every suite on the pin and on
+  `MIN_MMK_VERSION` (1.5.0), and a contract test keeps that matrix and the constant in step. The
+  typecheck runs on the pin only: the extension imports types 1.5.0 doesn't export
+  (`ConfigSummary`, `LockStatus`, `StatusRow.checksum`).
+- **MMK requests released:** R2, R3, R5, R8, R9, R10 and R11 in mongo-migrate-kit 1.6.0 (PRs
+  #11–#16, published 2026-10-19). R8's page is live but still names the old extension: fix it
+  after 1.1.0 ships. R4 (optional) isn't built. **R6 and R7 were dropped**
   (owner, 2026-10-18): their branches `feat/test-rollback` and `feat/lint` stay unmerged, and
   Phase 5 (rollback tests, lint) isn't in the extension.
 - **Extension ID:** `guptasantosh327.mongo-migrate-kit` (`publisher`.`name`). The publisher exists

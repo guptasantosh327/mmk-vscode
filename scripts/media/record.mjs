@@ -7,9 +7,10 @@
 //   npm run bundle && node scripts/media/record.mjs
 //   MEDIA_SCENES=local-workflow,environments node scripts/media/record.mjs   # some scenes only
 //
-// Output: media/readme/*.gif. It needs mongo-migrate-kit 1.6 for the edit warning and the
-// console's lock line: until that is this project's devDependency, point MEDIA_MMK_MODULES at a
-// node_modules folder that has it (the demo project gets it as its own node_modules), e.g.
+// Output: media/readme/*.gif. It needs mongo-migrate-kit 1.6 or later (the pinned devDependency)
+// for the edit warning and the console's lock line. To record with another build, point
+// MEDIA_MMK_MODULES at a node_modules folder that has it (the demo project gets it as its own
+// node_modules), e.g.
 //
 //   MEDIA_MMK_MODULES=.vscode-test/playground/shop-api/node_modules node scripts/media/record.mjs
 import { execFileSync, spawn } from 'node:child_process';
