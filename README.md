@@ -37,6 +37,8 @@ whatever it shows, `npx mmk` says the same in a terminal.
 
 ## Your local database
 
+![The migration console: plan and apply on local, roll the batch back, then prod held by a deploy's lock](media/readme/console.gif)
+
 - **The environments pipeline** at the top of the mmk sidebar: local → staging → prod, each with
   its pending count, the migration applied there last and anything that needs attention (or
   mmk's error, when it can't be read). Below it, *Review N pending* (the console's plan),
