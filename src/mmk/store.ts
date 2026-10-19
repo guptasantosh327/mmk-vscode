@@ -5,10 +5,17 @@ import {
   type MmkInvocation,
   type RunOptions,
   describeCommand,
+  isUnknownCommand,
   runMmkJson,
   runNodeJson,
 } from './cli.js';
-import { type ProjectConfig, type WireStatusRow, parseStatusRows } from './contract.js';
+import {
+  type ProjectConfig,
+  type WireLockStatus,
+  type WireStatusRow,
+  parseLockStatus,
+  parseStatusRows,
+} from './contract.js';
 import {
   type Connection,
   type Environment,
@@ -22,6 +29,14 @@ import {
 import type { Logger } from './log.js';
 import { type ConfigReaders, readProjectConfig } from './project-config.js';
 import type { ProjectState } from './project.js';
+import { redactMongoUri } from './redact.js';
+
+/** A command {@link MmkStore.run} ran: its label, where, and mmk's error when it failed */
+export interface FinishedRun {
+  label: string;
+  environment: string;
+  failure: string | null;
+}
 
 /** Why the last read of a project failed. `message` is mmk's own when mmk reported it */
 export interface ReadFailure {
@@ -43,6 +58,11 @@ export interface EnvironmentStatus {
   database: string | null;
   /** When the last successful read finished */
   readAt: Date | null;
+  /**
+   * Who holds the migration lock (`mmk lock --json`), from the last read; null when it isn't
+   * known: before a read, after a failed one, or with an mmk that has no `lock` command (1.5)
+   */
+  lock: WireLockStatus | null;
 }
 
 /** What the extension knows about one project right now */
@@ -125,6 +145,8 @@ interface Entry {
   configRead: Promise<void> | null;
   /** The environment the last config read (or attempt) used */
   configEnvironment: string | null;
+  /** Whether this project's mmk has `mmk lock` (R11, 1.6): null until a read finds out */
+  lockCommand: boolean | null;
   slots: Map<string, ReadSlot>;
   timer: ReturnType<typeof setTimeout> | null;
 }
@@ -139,6 +161,8 @@ interface Entry {
 export class MmkStore {
   private readonly entries = new Map<string, Entry>();
   private readonly listeners = new Set<() => void>();
+  private readonly outputListeners = new Set<(dir: string, line: string) => void>();
+  private readonly finishListeners = new Set<(dir: string, run: FinishedRun) => void>();
   private readonly runMmk: RunMmk;
   private readonly readers: ConfigReaders;
   private readonly connection: ConnectionLookup;
@@ -179,11 +203,14 @@ export class MmkStore {
         configStale: true,
         configRead: null,
         configEnvironment: null,
+        lockCommand: null,
         slots: new Map(),
         timer: null,
       };
       entry.snapshot = { ...entry.snapshot, state };
       entry.configStale = true;
+      // mmk may have been updated or replaced: ask again whether it has `mmk lock`.
+      entry.lockCommand = null;
       next.set(dir, entry);
     }
     for (const [dir, entry] of this.entries) {
@@ -266,6 +293,24 @@ export class MmkStore {
   onDidChange(listener: () => void): { dispose: () => void } {
     this.listeners.add(listener);
     return { dispose: () => this.listeners.delete(listener) };
+  }
+
+  /**
+   * Call `listener` with each line mmk writes to stderr (its own log) while a command started by
+   * {@link MmkStore.run} runs in a project, credentials hidden. Returns a disposable.
+   */
+  onDidOutput(listener: (dir: string, line: string) => void): { dispose: () => void } {
+    this.outputListeners.add(listener);
+    return { dispose: () => this.outputListeners.delete(listener) };
+  }
+
+  /**
+   * Call `listener` when a command started by {@link MmkStore.run} ends, with mmk's error message
+   * (credentials hidden) when it failed. Returns a disposable.
+   */
+  onDidFinishRun(listener: (dir: string, run: FinishedRun) => void): { dispose: () => void } {
+    this.finishListeners.add(listener);
+    return { dispose: () => this.finishListeners.delete(listener) };
   }
 
   /**
@@ -374,12 +419,32 @@ export class MmkStore {
     this.log.info(
       `$ ${describeCommand([...args, '--json'])}    (in ${dir}${environment.local ? '' : `, on ${environment.name}`})`,
     );
+    let failure: string | null = null;
     try {
       return await this.runMmk(state.invocation, args, {
         env: connectionEnv(connection),
-        onStderrLine: (line) => this.log.mmkOutput(line),
+        onStderrLine: (line) => {
+          this.log.mmkOutput(line);
+          const shown = redactMongoUri(line);
+          for (const listener of this.outputListeners) {
+            listener(dir, shown);
+          }
+        },
       });
+    } catch (error) {
+      failure = redactMongoUri(error instanceof Error ? error.message : String(error));
+      throw error;
     } finally {
+      for (const listener of this.finishListeners) {
+        listener(dir, { label, environment: environment.name, failure });
+      }
+      // A read during the run saw this run's own lock; it's released now, so drop it until the
+      // read below says what's there. Same change as ending the run: one emit, not two, so no
+      // listener sees the run still going after it finished.
+      const slot = entry.slots.get(environment.name);
+      if (slot) {
+        slot.status = { ...slot.status, lock: null };
+      }
       this.update(entry, { running: null, runningOn: null });
       void this.request(entry, environment.name);
     }
@@ -470,6 +535,7 @@ export class MmkStore {
             connected: true,
             database: null,
             readAt: null,
+            lock: null,
           },
           inflight: null,
           queued: null,
@@ -546,24 +612,66 @@ export class MmkStore {
       this.log.debug(
         `$ mmk status --json    (in ${entry.snapshot.dir}${environment.local ? '' : `, on ${name}`})`,
       );
-      const output = await this.runMmk(state.invocation, ['status'], {
-        env: connectionEnv(connection),
-        timeoutMs: this.statusTimeoutMs,
-        onStderrLine: debugLines,
-      });
+      const [output, lock] = await Promise.all([
+        this.runMmk(state.invocation, ['status'], {
+          env: connectionEnv(connection),
+          timeoutMs: this.statusTimeoutMs,
+          onStderrLine: debugLines,
+        }),
+        this.readLock(entry, name, connection),
+      ]);
       this.setStatus(entry, name, {
         rows: parseStatusRows(output.value, 'status'),
         error: null,
         readAt: new Date(),
+        lock,
       });
     } catch (error) {
       const failure = toFailure(error);
       this.log.warn(
         `Couldn't read ${entry.snapshot.dir} on ${name}: ${failure.code ? `${failure.code}: ` : ''}${failure.message}`,
       );
-      this.setStatus(entry, name, { rows: null, error: failure });
+      this.setStatus(entry, name, { rows: null, error: failure, lock: null });
     } finally {
       this.setStatus(entry, name, { loading: false });
+    }
+  }
+
+  /**
+   * Who holds the migration lock on one environment (`mmk lock --json`, request R11). Null when
+   * this project's mmk has no `lock` command (1.5: asked once, then not again) or the read
+   * failed: the lock is extra information, so it never fails the environment's read.
+   */
+  private async readLock(
+    entry: Entry,
+    name: string,
+    connection: Connection | null,
+  ): Promise<WireLockStatus | null> {
+    const { state } = entry.snapshot;
+    if (state.kind !== 'ready' || entry.lockCommand === false) {
+      return null;
+    }
+    try {
+      const output = await this.runMmk(state.invocation, ['lock'], {
+        env: connectionEnv(connection),
+        timeoutMs: this.statusTimeoutMs,
+        onStderrLine: (line) => this.log.mmkOutput(line, 'debug'),
+      });
+      entry.lockCommand = true;
+      return parseLockStatus(output.value);
+    } catch (error) {
+      if (isUnknownCommand(error, 'lock')) {
+        entry.lockCommand = false;
+        this.log.debug(
+          `${entry.snapshot.dir}: this mmk has no "lock" command, so the lock isn't shown`,
+        );
+        return null;
+      }
+      const failure = toFailure(error);
+      this.log.debug(
+        `Couldn't read the lock of ${entry.snapshot.dir} on ${name}: ${failure.message}`,
+      );
+      return null;
     }
   }
 

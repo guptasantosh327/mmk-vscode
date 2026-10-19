@@ -16,8 +16,9 @@ import {
 } from './views/applied-protection.js';
 import { BranchWatch } from './views/branch-watch.js';
 import { RunLinksProvider } from './views/codelens.js';
+import { registerConsole } from './views/console/panel.js';
 import { MigrationDecorations } from './views/decorations.js';
-import { registerMatrix } from './views/matrix/panel.js';
+import { PIPELINE_VIEW, PipelineProvider, type PipelineView } from './views/pipeline.js';
 import { SIDEBAR_VIEW, type SidebarNode, SidebarProvider } from './views/sidebar.js';
 import { StatusBar } from './views/statusbar.js';
 
@@ -36,6 +37,8 @@ export interface MmkTestApi {
   checkBranch(root: string, branch: string | null): Promise<string[]>;
   /** Check an open migration against what ran now; its edited state, or undefined */
   checkApplied(document: vscode.TextDocument): Promise<EditedState | undefined>;
+  /** The pipeline view's model, and its message handler */
+  pipeline: { view(): PipelineView; receive: PipelineProvider['receive'] };
 }
 
 /**
@@ -69,6 +72,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
   const watchers = new ProjectWatchers(store);
   const contextKeys = new ContextKeys();
   const branchWatch = new BranchWatch(deps);
+  const pipeline = new PipelineProvider(deps, context.extensionUri);
 
   // Snapshots change several times per read; redraw once per burst.
   let redrawScheduled = false;
@@ -134,6 +138,8 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     configFiles,
     { dispose: () => store.dispose() },
     store.onDidChange(scheduleRedraw),
+    pipeline,
+    vscode.window.registerWebviewViewProvider(PIPELINE_VIEW, pipeline),
     vscode.window.createTreeView(SIDEBAR_VIEW, {
       treeDataProvider: sidebar,
       showCollapseAll: true,
@@ -149,7 +155,7 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     ...registerRunCommands(deps),
     ...registerMiscCommands(deps),
     ...registerEnvironmentCommands(deps),
-    ...registerMatrix(deps, context.extensionUri),
+    ...registerConsole(deps, context.extensionUri, context.workspaceState),
     registerCreateCommand(deps),
     vscode.commands.registerCommand('mmk.refresh', async () => {
       await rediscover();
@@ -182,6 +188,10 @@ export function activate(context: vscode.ExtensionContext): MmkTestApi | undefin
     environments,
     checkBranch: (root, branch) => branchWatch.checkAfterSwitch(root, branch),
     checkApplied: (document) => protection.check(document),
+    pipeline: {
+      view: () => pipeline.view(),
+      receive: (message) => pipeline.receive(message),
+    },
   };
 }
 

@@ -5,15 +5,17 @@ the need goes here. Each request is **designed and built in MMK_REPO**
 (`/Users/santoshgupta/Desktop/development/mongo-migrate-kit`) in its own Claude session, following
 that repo's CLAUDE.md, with its own tests, changelog entry and release.
 
-**Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Once a request is released,
-raise `MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
+**Status values:** `open` → `in progress` → `released in mmk X.Y.Z`. Released in 1.6.0
+(2026-10-19, pinned here): R2, R3, R5, R8, R9, R10 and R11. Once a request is released, raise
+`MIN_MMK_VERSION` in `src/mmk/compat.ts` if the extension now depends on it.
 
 **Developing against the unreleased requests:** each one is on its own branch in MMK_REPO. To
 use them together, merge the branches in a throwaway clone (not in MMK_REPO), set its version to
 `1.6.0-dev.0`, build, `npm pack`, and `npm install --no-save <tarball>` here. The contract
 tests read the installed version: from `NEXT_MMK` (`1.6.0-0`, in `test/contract/harness.ts`)
-they expect the new behaviour, and 1.5 behaviour below it, so CI stays green on the pinned
-1.5.0. `npm ci` puts the pin back.
+they expect the new behaviour, and 1.5 behaviour below it, so CI stays green on 1.5.0, the oldest
+supported version. `npm ci` puts the pin back. For requests after 1.6.0, stamp the build with the
+next version instead.
 
 **Rules for every request:** additive and non-breaking for existing CLI and CI users; output
 covered by shape tests in MMK_REPO, so mmk's own CI fails if a shape changes; documented in
@@ -40,10 +42,9 @@ them instead of declaring them (`src/mmk/contract.ts` declares these three for n
 
 ---
 
-## R2 — Resolved config as JSON · Phase 2 (optional) · `in progress`
+## R2 — Resolved config as JSON · Phase 2 (optional) · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/config-json` (commit `d5925d1`, not pushed,
-not released) as `mmk config [--json]`, `MigratorKit.describeConfig()` and the exported
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #12, from branch `feat/config-json`), as `mmk config [--json]`, `MigratorKit.describeConfig()` and the exported
 `ConfigSummary` / `ConfigSource` types. It never connects, hides the URI's credentials, and
 reports `null` for an unset `uri` / `dbName` / `configFile`.
 
@@ -51,9 +52,8 @@ reports `null` for an unset `uri` / `dbName` / `configFile`.
 (1.5's public `MigratorKit.resolveConfig()`, CLAUDE.md rule 1), and it switches to
 `mmk config --json` on any mmk that has it. What R2 still adds: the config can be read without a
 connection string, it names where each value came from, and the extension needs no library
-call. When it's released, pin that version, import `ConfigSummary` instead of the local
-`ProjectConfig`, and change the contract test that expects `via: 'library'`. Don't raise
-`MIN_MMK_VERSION` for it.
+call. The contract test expects `via: 'cli'` from 1.6, and `ProjectConfig` is a `Pick` of
+`ConfigSummary` since 1.6.0 is pinned. Don't raise `MIN_MMK_VERSION` for it.
 
 **Why:** the extension needs the resolved migrations folder, file extensions and create defaults.
 Without this it would have to re-implement mmk's config loading (precedence, `.env`, config
@@ -82,10 +82,11 @@ it works without a database.
 
 ---
 
-## R3 — Read commands never write on connect · Phase 3 · `in progress`
+## R3 — Read commands never write on connect · Phase 3 · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/read-only-reads` (commit `3a5b2d6`, not
-pushed, not released) as `connect({ readOnly: true })` (exported `ConnectOptions`), used by
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #13, from branch `feat/read-only-reads`, with
+the owner's `fb8b2af`: a write command run by a user that can't write now fails with
+`CONNECTION_FAILED` at its first write, the storage marker included), as `connect({ readOnly: true })` (exported `ConnectOptions`), used by
 `status`, `list`, `dry-run`, `status --all-namespaces`, `lockInfo()` and `pendingMigrations()`.
 Write commands still create the changelog index on connect. Tested with an auth-enabled memory
 server and a `read`-role user (library and CLI). The extension's contract test
@@ -125,13 +126,11 @@ Existing functions that take no argument keep working.
 
 ---
 
-## R5 — Recorded checksum in status output · Phase 4 · `in progress`
+## R5 — Recorded checksum in status output · Phase 4 · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/status-checksum` (commit `1c4589a`, not
-pushed, not released) as `StatusRow.checksum` on applied rows of `status`, `list` and `dry-run`
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #14, from branch `feat/status-checksum`), as `StatusRow.checksum` on applied rows of `status`, `list` and `dry-run`
 (omitted when a record has none, e.g. an `mmk import` without its file), with a shape test.
-Until it's released, `src/mmk/contract.ts` adds the field in `WireStatusRow`; once pinned,
-that becomes plain `Wire<StatusRow>`.
+`WireStatusRow` in `src/mmk/contract.ts` is plain `Wire<StatusRow>` since 1.6.0 is pinned.
 
 **Why:** to warn while someone edits an applied file, and to find the version that ran in git, the
 extension needs the **recorded** checksum. `StatusRow` only has `checksumOk`.
@@ -190,24 +189,26 @@ without a name.
 
 ---
 
-## R8 — Docs page for the extension · Phase 6 · `in progress`
+## R8 — Docs page for the extension · Phase 6 · `released in mmk 1.6.0`
 
-**Status:** written on mongo-migrate-kit branch `feat/vscode-docs` (commit `309ef38`, not pushed,
-not released) as `docs/guide/vscode.md` ("In VS Code" in the guide's sidebar): install,
-environments, read-only users, applied-file warnings, rollback tests, lint and the compatibility
-table. It names 1.6.0 as the release with R3/R5.
+**Status:** released with mongo-migrate-kit 1.6.0 (PR #15, from branch `feat/vscode-docs`) as
+`docs/guide/vscode.md` ("In VS Code" in the guide's sidebar): install, environments, read-only
+users, applied-file warnings and the compatibility table. It names 1.6.0 as the release with
+R3/R5. The docs site deploys from `main`, so it's live at
+https://mongo-migrate-kit.vercel.app/guide/vscode. **Follow-up, after the extension's 1.1.0 is
+published** (docs/RELEASE.md, step 4): it still uses the old name and ID (`mmk for VS Code`,
+`guptasantosh327.mmk-vscode`) and predates the console, the pipeline and environment colours.
 
 **Proposal:** a page in MMK_REPO `docs/` (VitePress) covering install, environments, read-only users,
 and the compatibility table.
 
 ---
 
-## R9 — Keep stdout to the JSON document in `--json` mode · Phase 2 (optional) · `in progress`
+## R9 — Keep stdout to the JSON document in `--json` mode · Phase 2 (optional) · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/json-output` (commit `905f178`, not pushed,
-not released). Checked through `file:../mongo-migrate-kit`: the only contract test that changes is
-"stdout from user code", whose `otherStdout` becomes `''`. When it's released, update that test.
-Keep the tolerant parser in `parseJsonStdout`, because older mmk versions still leak.
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #11, from branch `feat/json-output`). The
+contract test "stdout from user code" expects `otherStdout` to be `''` from 1.6, and the 1.5 leak
+below it. Keep the tolerant parser in `parseJsonStdout`, because 1.5 still leaks.
 
 **Why:** found in Phase 1. `--json` promises one JSON document on stdout, but mmk only routes its
 *own* logger to stderr. A `console.log` in a migration, a hook or a config function still goes to
@@ -225,12 +226,13 @@ the command, and write the JSON document through the original stdout.
 
 ---
 
-## R10 — Results of the files that ran, when a run fails · Phase 2 (optional) · `in progress`
+## R10 — Results of the files that ran, when a run fails · Phase 2 (optional) · `released in mmk 1.6.0`
 
-**Status:** built on mongo-migrate-kit branch `feat/json-output` (commit `6f7041e`, not pushed,
-not released). The contract tests still pass against it. Covers `up`, `down` and `redo` (the revert
-comes first), and the library's `err.context.results`. When it's released, add `details.results`
-to the contract test for `MIGRATION_EXECUTION_FAILED` and read it in the A3 notification.
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #11, from branch `feat/json-output`). Covers
+`up`, `down` and `redo` (the revert comes first), and the library's `err.context.results`. The
+console's result reads it (`runResultsOfFailure`), and the contract test "a run that stops
+partway" checks `details.results` from 1.6 (none on 1.5). The A3 notification it was first meant
+for was dropped (owner, 2026-10-18).
 
 **Why:** found in Phase 1. When `mmk up --json` applies two files and the third throws, mmk prints
 only the error document. The results of the two files that did apply are dropped, so the A3
@@ -241,3 +243,45 @@ notification can't say "Applied 2 on local, then x.js failed" without running `s
 `cause` and `location`). Additive.
 
 **Done when:** a CLI test of a failing batch shows the applied files in `details.results`.
+
+---
+
+## R11 — Who holds the lock, from a command that doesn't release it · Phase 7 · `released in mmk 1.6.0`
+
+**Status:** released in mongo-migrate-kit 1.6.0 (PR #16, from branch `feat/lock-command`) as
+`mmk lock [--json]`, `MigratorKit.lockStatus()` and the exported `LockStatus` type
+(`WireLockStatus` is `Wire<LockStatus>`), with tests (lock free, held, stale, a pre-1.5 holder;
+nothing written; a `read`-role user) and docs (`/commands/lock`). One change from the proposal: the output also has `stale`, mmk's verdict on the server's clock, by the
+same filter a run uses to take the lock over, so the extension never judges staleness itself
+(rule 1). The extension reads it in `MmkStore` (`readLock`), shows a lock in force in the
+pipeline, the console, the tree and the status bar, and offers *Release the lock…* on writable
+environments. On an mmk without the command it asks once and stops (`isUnknownCommand`).
+
+**Why:** the console and the pipeline sidebar (Phase 7) show when an environment's lock is held
+and by whom, so nobody starts a run that will only fail with `LOCK_ALREADY_HELD`. Today the only
+command that reads the lock, `mmk unlock`, also releases it, and `status --json` doesn't mention
+it. The extension can't read the lock collection itself (rule 1), so until this ships it shows the
+lock only when a run reports it.
+
+**Proposal:** a read-only command, `mmk lock --json`, printing `{ "holder": LockInfo | null }`
+(`LockInfo` is already exported). It never acquires or releases the lock, and connects the way R3's
+read commands do, so it works with a `read`-role user. The extension adds it to the read-only
+commands in `assertCanRun`.
+
+**Done when:** the command exists, a test shows it changes nothing (lock held and free), the
+`--json` output has a shape test, and it's documented with `unlock`.
+
+---
+
+## R12 — The batch a run would record, in `dry-run` · Phase 7 (optional) · `open`
+
+**Why:** the console's plan (C6) says what a run will be recorded as, so that the result and
+*Roll back batch N* match what the user approved. `dry-run up --json` returns the pending rows
+with `batch: null`, and the extension mustn't work out the next number itself (rule 1: batches
+are mmk's).
+
+**Proposal:** an optional `plannedBatch?: number` on each row `dry-run up` would apply: the batch
+`up` would record now. Additive: `batch` keeps meaning "the batch it ran in", and stays `null`.
+
+**Done when:** `dry-run up --json` rows carry `plannedBatch`, with a shape test, and the docs for
+`dry-run` mention it.

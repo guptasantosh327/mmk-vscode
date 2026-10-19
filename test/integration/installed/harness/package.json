@@ -1,6 +1,6 @@
 {
   "name": "mmk-vscode-test-harness",
-  "displayName": "mmk for VS Code test harness",
+  "displayName": "Mongo Migrate Kit test harness",
   "description": "Hosts the installed-extension tests. Has no code of its own.",
   "publisher": "mmk-vscode-tests",
   "version": "0.0.0",

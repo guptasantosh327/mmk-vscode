@@ -86,6 +86,12 @@ export function formatWhen(date: Date, now: Date = new Date()): string {
   return formatDay(date, now);
 }
 
+/** `10:32` today, `13 Oct 10:32` on another day */
+export function formatClock(date: Date, now: Date = new Date()): string {
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return date.toDateString() === now.toDateString() ? time : `${formatDay(date, now)} ${time}`;
+}
+
 /** `13 Oct`, with the year when it isn't the current one */
 export function formatDay(date: Date, now: Date = new Date()): string {
   const day = `${date.getDate()} ${MONTHS[date.getMonth()] ?? ''}`;

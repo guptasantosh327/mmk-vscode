@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { WireStatusRow } from '../../src/mmk/contract.js';
-import { buildStatusModel, formatDay, formatDuration, formatWhen } from '../../src/mmk/model.js';
+import {
+  buildStatusModel,
+  formatClock,
+  formatDay,
+  formatDuration,
+  formatWhen,
+} from '../../src/mmk/model.js';
 
 function applied(
   file: string,
@@ -105,6 +111,18 @@ describe('formatWhen', () => {
   it('should add the year only when it differs', () => {
     expect(formatDay(new Date(2026, 4, 1), now)).toBe('1 May');
     expect(formatDay(new Date(2024, 4, 1), now)).toBe('1 May 2024');
+  });
+});
+
+describe('formatClock', () => {
+  const now = new Date(2026, 9, 16, 14, 30, 0);
+
+  it.each([
+    [new Date(2026, 9, 16, 9, 7, 0), '09:07'],
+    [new Date(2026, 9, 15, 23, 5, 0), '15 Oct 23:05'],
+    [new Date(2025, 0, 2, 8, 0, 0), '2 Jan 2025 08:00'],
+  ])('should show %s as %j', (date, text) => {
+    expect(formatClock(date, now)).toBe(text);
   });
 });
 

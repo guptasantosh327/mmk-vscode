@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 /** The extension's ID: `<publisher>.<name>` from package.json */
-export const EXTENSION_ID = 'guptasantosh327.mmk-vscode';
+export const EXTENSION_ID = 'guptasantosh327.mongo-migrate-kit';
 
 /** The repository root (tests run from out/test/integration) */
 export const REPO_ROOT = path.resolve(__dirname, '../../..');

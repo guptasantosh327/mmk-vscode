@@ -1,8 +1,8 @@
 {
-  "name": "mmk-vscode",
-  "displayName": "mmk for VS Code",
+  "name": "mongo-migrate-kit",
+  "displayName": "Mongo Migrate Kit",
   "description": "Run, roll back and compare mongo-migrate-kit MongoDB migrations from the editor, with a warning when you edit one that already ran",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "guptasantosh327",
   "license": "MIT",
   "author": "Santosh Gupta",
@@ -67,6 +67,14 @@
     "views": {
       "mmk": [
         {
+          "type": "webview",
+          "id": "mmk.pipeline",
+          "name": "Environments",
+          "icon": "media/mmk.svg",
+          "contextualTitle": "mmk",
+          "when": "mmk.hasProject"
+        },
+        {
           "id": "mmk.migrations",
           "name": "Migrations",
           "icon": "media/mmk.svg",
@@ -78,7 +86,7 @@
       {
         "view": "mmk.migrations",
         "when": "mmk.discovered && !mmk.hasProject",
-        "contents": "No mmk project in this workspace.\nmmk for VS Code looks for an mmk.config.js, .ts or .json, or a package.json that depends on mongo-migrate-kit.\n[Read the getting started guide](https://mongo-migrate-kit.vercel.app/guide/getting-started)\n[Refresh](command:mmk.refresh)"
+        "contents": "No mmk project in this workspace.\nThe extension looks for an mmk.config.js, .ts or .json, or a package.json that depends on mongo-migrate-kit.\n[Read the getting started guide](https://mongo-migrate-kit.vercel.app/guide/getting-started)\n[Refresh](command:mmk.refresh)"
       },
       {
         "view": "mmk.migrations",
@@ -88,7 +96,7 @@
       {
         "view": "mmk.migrations",
         "when": "mmk.problem == 'too-old'",
-        "contents": "Update mongo-migrate-kit to 1.5.0 or later.\nThis project has an older version, and mmk for VS Code only reads the output of 1.5.0 or later. Run npm install --save-dev mongo-migrate-kit@latest, then refresh.\n[Refresh](command:mmk.refresh)\n[Show details](command:mmk.showOutput)"
+        "contents": "Update mongo-migrate-kit to 1.5.0 or later.\nThis project has an older version, and the extension only reads the output of 1.5.0 or later. Run npm install --save-dev mongo-migrate-kit@latest, then refresh.\n[Refresh](command:mmk.refresh)\n[Show details](command:mmk.showOutput)"
       },
       {
         "view": "mmk.migrations",
@@ -139,6 +147,12 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "mmk.downBatch",
+        "title": "Roll back a batch…",
+        "category": "mmk",
+        "icon": "$(discard)"
+      },
+      {
         "command": "mmk.dryRun",
         "title": "Dry run",
         "category": "mmk",
@@ -169,10 +183,16 @@
         "icon": "$(output)"
       },
       {
+        "command": "mmk.openConsole",
+        "title": "Open migration console",
+        "category": "mmk",
+        "icon": "$(table)"
+      },
+      {
         "command": "mmk.compareEnvironments",
         "title": "Compare all environments",
         "category": "mmk",
-        "icon": "$(table)"
+        "icon": "$(diff-multiple)"
       },
       {
         "command": "mmk.addEnvironment",
@@ -191,6 +211,12 @@
         "title": "Remove environment…",
         "category": "mmk",
         "icon": "$(trash)"
+      },
+      {
+        "command": "mmk.setEnvironmentColor",
+        "title": "Change environment colour…",
+        "category": "mmk",
+        "icon": "$(symbol-color)"
       },
       {
         "command": "mmk.showAppliedVersion",
@@ -218,7 +244,7 @@
           "group": "navigation@1"
         },
         {
-          "command": "mmk.compareEnvironments",
+          "command": "mmk.openConsole",
           "when": "view == mmk.migrations && mmk.hasProject",
           "group": "navigation@2"
         },
@@ -313,6 +339,16 @@
           "command": "mmk.selectEnvironment",
           "when": "view == mmk.migrations && viewItem == mmk.env",
           "group": "inline@2"
+        },
+        {
+          "command": "mmk.editEnvironment",
+          "when": "view == mmk.migrations && viewItem == mmk.env",
+          "group": "3_env@0"
+        },
+        {
+          "command": "mmk.setEnvironmentColor",
+          "when": "view == mmk.migrations && viewItem == mmk.env",
+          "group": "3_env@1"
         }
       ],
       "commandPalette": [
@@ -353,11 +389,23 @@
           "when": "mmk.hasProject"
         },
         {
+          "command": "mmk.openConsole",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.downBatch",
+          "when": "mmk.hasProject"
+        },
+        {
           "command": "mmk.compareEnvironments",
           "when": "mmk.hasProject"
         },
         {
           "command": "mmk.addEnvironment",
+          "when": "mmk.hasProject"
+        },
+        {
+          "command": "mmk.setEnvironmentColor",
           "when": "mmk.hasProject"
         },
         {
@@ -407,7 +455,7 @@
           "type": "array",
           "default": [],
           "scope": "window",
-          "markdownDescription": "Databases to compare your branch with, besides `local` (this project's own config and `.env`). Only names, read-only flags and colors go here: each connection string stays in the OS keychain. Add one with **mmk: Add environment…**.",
+          "markdownDescription": "Databases to compare your branch with, besides `local` (this project's own config and `.env`), and each one's read-only flag and colour (an entry for `local` sets its colour). Each connection string stays in the OS keychain. Add one with **mmk: Add environment…**.",
           "items": {
             "type": "object",
             "required": [
@@ -429,16 +477,28 @@
               "color": {
                 "type": "string",
                 "enum": [
+                  "green",
+                  "blue",
+                  "purple",
+                  "yellow",
+                  "orange",
+                  "red",
                   "default",
                   "warning",
                   "error"
                 ],
                 "enumDescriptions": [
-                  "The default status bar background",
-                  "The warning background (staging by default)",
-                  "The error background (anything named like prod by default)"
+                  "Green (local by default)",
+                  "Blue",
+                  "Purple",
+                  "Yellow, with the warning status bar background (the first other environment by default)",
+                  "Orange, with the warning status bar background",
+                  "Red, with the error status bar background (anything named like prod by default)",
+                  "Blue (the first value this setting had)",
+                  "Yellow (the first value this setting had)",
+                  "Red (the first value this setting had)"
                 ],
-                "description": "The status bar background while this environment is selected."
+                "markdownDescription": "The environment's colour in the sidebar, the migration console and the status bar. Without one, each environment gets a different colour. Set it with **mmk: Change environment colour…**."
               }
             }
           }
@@ -457,7 +517,7 @@
     "format": "biome format --write src test",
     "test": "vitest run --project unit",
     "test:contract": "vitest run --project contract",
-    "pretest:integration": "node esbuild.js && tsc -p tsconfig.integration.json",
+    "pretest:integration": "node esbuild.js && tsc -p tsconfig.integration.json --noCheck",
     "test:integration": "vscode-test && node test/integration/run-installed.mjs",
     "package": "vsce package"
   },
@@ -470,7 +530,7 @@
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
-    "mongo-migrate-kit": "1.5.0",
+    "mongo-migrate-kit": "1.6.0",
     "mongodb": "^6.12.0",
     "mongodb-memory-server": "^10.1.2",
     "typescript": "^5.9.3",

@@ -1,4 +1,4 @@
-# Design — mmk for VS Code
+# Design — Mongo Migrate Kit for VS Code
 
 **Live mockup:** https://claude.ai/artifact/ShXWe1gdAancBaTcXb3Zsk — page **"VS Code extension"**
 (private to the owner; open it signed in). The page "Web dashboard" is an earlier idea and is
@@ -57,8 +57,9 @@ In the matrix webview, use `--vscode-*` CSS variables (e.g. `--vscode-charts-gre
 - **Build it as:** a `TreeDataProvider` with view-title actions; a `CodeLensProvider`; a `StatusBarItem`.
 
 ### A3 · Applied on local (Phase 2) — `VSRun.dc.html`
-- **Notification:** "Applied on local in 412 ms", detail "add-refunds-collection.js · batch 18 ·
-  transaction committed", buttons **Test rollback** (dropped with Phase 5: not built) and **Run down**.
+- **Notification:** dropped (owner, 2026-10-18). The mockup had "Applied on local in 412 ms" with
+  **Run down**; the run links, sidebar and status bar below already show the result and offer the
+  next step. Only a failure (mmk's message as is) or a run that did nothing gets one.
 - **Run links after:** `✓ Applied on local · batch 18 · 412 ms | Redo | staging: pending | prod: pending`
   above `up()`; `Run down on local` above `down()` (*Test rollback* dropped with Phase 5).
 - **Output channel "mmk":** mmk's own log lines for the run (its stderr in `--json` mode).
@@ -138,11 +139,49 @@ In the matrix webview, use `--vscode-*` CSS variables (e.g. `--vscode-charts-gre
 
 ---
 
+## Flow D — Migration console and pipeline sidebar (Phase 7)
+
+**Mockups:** <https://claude.ai/artifact/HkfYg1uFrqRcdXYekFnXSg> (private to the owner). Page
+**C · Flows** has the flow map and C1–C13; frame **B** on page **Directions** is the pipeline
+sidebar. The custom looks on page **C · Styles** were turned down: the console uses VS Code's theme
+colours, as C1–C13 do. The frames were drawn in Dark Modern; in any other theme the same layout
+takes that theme's colours.
+
+- **C1 Overview:** header (project, files from), environment tabs with pending counts, filters
+  (*All*, *Pending*, *Needs attention*, *Only differences*), files from *branch* or *origin/main*,
+  the migrations × environments table, the selected migration's detail (its record on each
+  environment, actions for the selected one, the CLI command), and the selected environment's
+  batches.
+- **C2** an applied migration (*Run down…*, *Redo…*, *Roll back batch N…*); **C3** a read-only
+  environment (a notice, *Plan* and the command to copy only); **C4** *Only differences* with
+  notes, files from `origin/main`.
+- **C5** new migration · **C6** plan · **C7** running (mmk's own output, no Stop) · **C8** result ·
+  **C9** confirm rolling back a batch.
+- **C10** the diff against the version that ran · **C11** lock held (from a run's
+  `LOCK_ALREADY_HELD`; R11 shows it before a run) · **C12** can't connect (mmk's error as is) ·
+  **C13** add environment (built as the console's *Add environment* dialog, 2026-10-19; the same
+  dialog edits and removes one).
+- **Lock & notices** (page of the same name, owner's choice 2026-10-19: design **A**): another
+  run's lock sits on a line under the tabs (environment, writable or read-only, `host/db`, then
+  "Locked by ci on deploy-runner-7 · 4 min" and *Release…*); a click opens the details (A2). Tabs
+  get an amber dot, run buttons stay greyed out with the reason, the sidebar card gets the same
+  label and an amber ring on its dot (A4). Notices never take turns: the lock isn't one, read-only
+  is on the line, and the edited notice has *Review it* and *Dismiss* (A3). Design **B** (a card
+  where you'd run) was not chosen.
+- **Build it as:** a `WebviewPanel` (the matrix's, grown), strict CSP, data over `postMessage`,
+  every action through the existing commands. The pipeline sidebar is a `WebviewView` above the
+  tree. Colours: `--vscode-*` only (pending `charts-blue`, applied `testing-iconPassed`, edited
+  `editorWarning-foreground`, selection `list-activeSelectionBackground`, borders
+  `panel-border`), icons from codicons.
+
+---
+
 ## Screens not drawn yet (build from these notes)
 
 - **Add environment** (Phase 3): name → masked connection-string input → database (pre-filled from
   the URI path) → "Testing connection…" → "Connected · 44 applied, 1 pending" or mmk's own error
-  message → read-only toggle (on by default for anything not `local`).
+  message → read-only toggle (on by default for anything not `local`). *Replaced by C13, the
+  console's dialog (2026-10-19); the prompts remain for "Edit environment".*
 - **Welcome views** (Phase 2): mmk not installed ("Install mongo-migrate-kit in this project");
   mmk too old ("Update to X or later"); untrusted workspace ("Trust this folder to run mmk");
   connection failed (mmk's `CONNECTION_FAILED` message, which already names the masked URI and the reason).

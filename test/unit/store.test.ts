@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { type JsonOutput, MmkCommandError, type RunOptions } from '../../src/mmk/cli.js';
+import {
+  type JsonOutput,
+  MmkCommandError,
+  MmkProcessError,
+  type RunOptions,
+} from '../../src/mmk/cli.js';
 import type { Logger } from '../../src/mmk/log.js';
 import type { ProjectState } from '../../src/mmk/project.js';
 import { MmkStore, StoreError } from '../../src/mmk/store.js';
@@ -72,6 +77,29 @@ function fakeMmk(answers: Record<string, () => Promise<unknown> | unknown>): {
   };
 }
 
+const NO_LOCK = { holder: null, stale: false };
+
+const HELD_LOCK = {
+  holder: {
+    lockedAt: '2026-10-18T10:32:00.000Z',
+    pid: 4242,
+    host: 'deploy-runner-7',
+    executedBy: 'ci',
+    acquiredAt: '2026-10-18T10:32:00.000Z',
+    expiresAt: '2026-10-18T10:33:00.000Z',
+  },
+  stale: false,
+};
+
+/** What mmk 1.5 prints for a command it doesn't have */
+function unknownCommand(command: string): MmkProcessError {
+  return new MmkProcessError(
+    'bad-output',
+    'mmk printed no JSON document',
+    `error: unknown command '${command}'\n(run \`mmk --help\`, or \`mmk <command> --help\`, for usage)\n`,
+  );
+}
+
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {};
   const promise = new Promise<void>((done) => {
@@ -81,13 +109,14 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe('MmkStore', () => {
-  it('should read config then status for a ready project', async () => {
-    const mmk = fakeMmk({ config: () => CONFIG, status: () => [PENDING_ROW] });
+  it('should read config, then status and the lock side by side, for a ready project', async () => {
+    const mmk = fakeMmk({ config: () => CONFIG, status: () => [PENDING_ROW], lock: () => NO_LOCK });
     const store = new MmkStore({ log: quiet, run: mmk.run });
     store.setProjects([ready()]);
     await store.idle();
 
-    expect(mmk.calls).toEqual([['config'], ['status']]);
+    expect(mmk.calls).toEqual([['config'], ['status'], ['lock']]);
+    expect(store.snapshot(DIR)?.environments.local?.lock).toEqual(NO_LOCK);
     expect(store.snapshot(DIR)).toMatchObject({
       config: { migrationsDir: MIGRATIONS },
       rows: [PENDING_ROW],
@@ -163,7 +192,7 @@ describe('MmkStore', () => {
     await store.refresh(DIR);
     await store.refresh(DIR, { reloadConfig: true });
 
-    expect(mmk.calls.map((args) => args[0])).toEqual([
+    expect(mmk.calls.map((args) => args[0]).filter((command) => command !== 'lock')).toEqual([
       'config',
       'status',
       'status',
@@ -209,7 +238,107 @@ describe('MmkStore', () => {
     await store.idle();
 
     expect(store.snapshot(DIR)?.running).toBeNull();
-    expect(mmk.calls.map((args) => args[0])).toEqual(['config', 'status', 'up', 'status']);
+    expect(mmk.calls.map((args) => args[0]).filter((command) => command !== 'lock')).toEqual([
+      'config',
+      'status',
+      'up',
+      'status',
+    ]);
+  });
+
+  it('should stop asking for the lock once mmk says it has no lock command (1.5)', async () => {
+    const mmk = fakeMmk({
+      config: () => CONFIG,
+      status: () => [PENDING_ROW],
+      lock: () => {
+        throw unknownCommand('lock');
+      },
+    });
+    const store = new MmkStore({ log: quiet, run: mmk.run });
+    store.setProjects([ready()]);
+    await store.idle();
+    await store.refresh(DIR);
+
+    expect(mmk.calls.filter((args) => args[0] === 'lock')).toHaveLength(1);
+    expect(store.snapshot(DIR)?.environments.local).toMatchObject({
+      rows: [PENDING_ROW],
+      error: null,
+      lock: null,
+    });
+  });
+
+  it("should keep the status when the lock can't be read, and try again next time", async () => {
+    const mmk = fakeMmk({
+      config: () => CONFIG,
+      status: () => [PENDING_ROW],
+      lock: () => {
+        throw new MmkCommandError(
+          { code: 'CONNECTION_FAILED', message: 'lock read failed' },
+          ['lock'],
+          1,
+          '',
+        );
+      },
+    });
+    const store = new MmkStore({ log: quiet, run: mmk.run });
+    store.setProjects([ready()]);
+    await store.idle();
+    await store.refresh(DIR);
+
+    expect(mmk.calls.filter((args) => args[0] === 'lock')).toHaveLength(2);
+    expect(store.snapshot(DIR)?.environments.local).toMatchObject({
+      rows: [PENDING_ROW],
+      error: null,
+      lock: null,
+    });
+  });
+
+  it("should drop a run's own lock when the run ends, until the next read says", async () => {
+    let lock: unknown = HELD_LOCK;
+    const mmk = fakeMmk({
+      config: () => CONFIG,
+      status: () => [PENDING_ROW],
+      lock: () => lock,
+      up: () => [{ file: '0001-a.js', status: 'applied', duration: 5, batch: 1 }],
+    });
+    const store = new MmkStore({ log: quiet, run: mmk.run });
+    store.setProjects([ready()]);
+    await store.idle();
+    expect(store.snapshot(DIR)?.environments.local?.lock).toEqual(HELD_LOCK);
+
+    lock = NO_LOCK;
+    await store.run(DIR, ['up', '0001-a.js'], 'up a.js');
+    expect(store.snapshot(DIR)?.environments.local?.lock).toBeNull();
+    await store.idle();
+    expect(store.snapshot(DIR)?.environments.local?.lock).toEqual(NO_LOCK);
+  });
+
+  it("should pass mmk's log lines of a run to output listeners, credentials hidden", async () => {
+    const mmk = fakeMmk({ config: () => CONFIG, status: () => [PENDING_ROW] });
+    const store = new MmkStore({
+      log: quiet,
+      run: async (invocation, args, options) => {
+        if (args[0] === 'up') {
+          options.onStderrLine?.('Running 0001-a.js');
+          options.onStderrLine?.('connected to mongodb://alice:s3cret@db.example.com/orders');
+          return { value: [], exitCode: 0, stderr: '', otherStdout: '' };
+        }
+        return mmk.run(invocation, args, options);
+      },
+    });
+    store.setProjects([ready()]);
+    await store.idle();
+    const lines: Array<[string, string]> = [];
+    const listening = store.onDidOutput((dir, line) => lines.push([dir, line]));
+
+    await store.run(DIR, ['up'], 'up');
+    listening.dispose();
+    await store.run(DIR, ['up'], 'up');
+
+    expect(lines).toEqual([
+      [DIR, 'Running 0001-a.js'],
+      [DIR, 'connected to mongodb://***:***@db.example.com/orders'],
+    ]);
   });
 
   it('should clear the running command when it fails, and pass the error on', async () => {
@@ -232,6 +361,49 @@ describe('MmkStore', () => {
 
     await expect(store.run(DIR, ['up'], 'up')).rejects.toBe(failure);
     expect(store.snapshot(DIR)?.running).toBeNull();
+  });
+
+  it("should tell finish listeners how each run ended, with mmk's message hidden of credentials", async () => {
+    let fail = false;
+    const mmk = fakeMmk({
+      config: () => CONFIG,
+      status: () => [],
+      up: () => {
+        if (fail) {
+          throw new MmkCommandError(
+            {
+              code: 'CONNECTION_FAILED',
+              message: 'Could not connect to mongodb://alice:s3cret@db.example.com',
+            },
+            ['up'],
+            1,
+            '',
+          );
+        }
+        return [];
+      },
+    });
+    const store = new MmkStore({ log: quiet, run: mmk.run });
+    store.setProjects([ready()]);
+    await store.idle();
+    const runs: unknown[] = [];
+    store.onDidFinishRun((dir, run) => runs.push([dir, run]));
+
+    await store.run(DIR, ['up'], 'up 0001-a.js');
+    fail = true;
+    await expect(store.run(DIR, ['up'], 'up')).rejects.toThrow();
+
+    expect(runs).toEqual([
+      [DIR, { label: 'up 0001-a.js', environment: 'local', failure: null }],
+      [
+        DIR,
+        {
+          label: 'up',
+          environment: 'local',
+          failure: 'Could not connect to mongodb://***:***@db.example.com',
+        },
+      ],
+    ]);
   });
 
   it('should find the project and status row for a file in its migrations folder only', async () => {
@@ -390,7 +562,7 @@ describe('MmkStore with environments', () => {
 
     for (const args of [['up'], ['down', '0001-a.js'], ['redo'], ['unlock', '--yes']]) {
       await expect(store.run(DIR, args, args[0] ?? '')).rejects.toThrow(
-        /^staging is read-only, so mmk for VS Code won't run "mmk /,
+        /^staging is read-only, so the extension won't run "mmk /,
       );
     }
     // Naming the environment explicitly makes no difference.

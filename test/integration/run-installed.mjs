@@ -14,7 +14,7 @@ import {
   resolveCliPathFromVSCodeExecutablePath,
 } from '@vscode/test-electron';
 
-const EXTENSION_ID = 'guptasantosh327.mmk-vscode';
+const EXTENSION_ID = 'guptasantosh327.mongo-migrate-kit';
 const root = resolve(import.meta.dirname, '../..');
 const workspace = join(root, 'test/fixtures/workspace');
 // VS Code puts an IPC socket in the user data folder, and a socket path must stay under 104
@@ -76,7 +76,7 @@ function launch(executable, profileArgs, entry, extraArgs) {
 
 let status = 0;
 try {
-  const vsix = join(scratch, 'mmk-vscode.vsix');
+  const vsix = join(scratch, 'mongo-migrate-kit.vsix');
   run('npx', ['vsce', 'package', '--out', vsix]);
   const executable = await downloadAndUnzipVSCode({ cachePath: join(root, '.vscode-test') });
   const cli = resolveCliPathFromVSCodeExecutablePath(executable);

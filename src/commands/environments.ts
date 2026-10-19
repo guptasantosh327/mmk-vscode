@@ -4,15 +4,20 @@ import { MmkCommandError, runMmkJson } from '../mmk/cli.js';
 import { parseStatusRows } from '../mmk/contract.js';
 import {
   type Connection,
+  ENVIRONMENT_HUES,
   type Environment,
+  type EnvironmentHue,
   LOCAL_ENVIRONMENT,
   connectionEnv,
   connectionStringProblem,
   databaseFromUri,
+  environmentHue,
   environmentNameProblem,
   hostLabel,
+  statusBarBackground,
 } from '../mmk/environments.js';
 import type { ProjectSnapshot } from '../mmk/store.js';
+import type { ConsolePanel } from '../views/console/panel.js';
 import { type Deps, databaseLabel, resolveProject } from './context.js';
 
 /** Arguments for "mmk: Add environment"; with all of them set, nothing is asked */
@@ -33,15 +38,98 @@ export function registerEnvironmentCommands(deps: Deps): vscode.Disposable[] {
       typeof name === 'string' ? selectByName(deps, name) : pickEnvironment(deps),
     ),
     vscode.commands.registerCommand('mmk.addEnvironment', (args?: AddArgs) =>
-      addEnvironment(deps, args ?? {}),
+      args?.name === undefined ? openAddDialog(args?.dir) : addEnvironment(deps, args),
     ),
-    vscode.commands.registerCommand('mmk.editEnvironment', (name?: unknown) =>
-      editEnvironment(deps, typeof name === 'string' ? name : undefined),
+    vscode.commands.registerCommand('mmk.editEnvironment', (target?: unknown) =>
+      editEnvironment(deps, environmentNameOf(deps, target)),
     ),
     vscode.commands.registerCommand('mmk.removeEnvironment', (name?: unknown) =>
       removeEnvironment(deps, typeof name === 'string' ? name : undefined),
     ),
+    vscode.commands.registerCommand('mmk.setEnvironmentColor', (target?: unknown, hue?: unknown) =>
+      setEnvironmentColor(deps, environmentNameOf(deps, target), isHue(hue) ? hue : undefined),
+    ),
   ];
+}
+
+/** The environment a command argument names: a name, or the tree's environment row (the selected one) */
+function environmentNameOf(deps: Deps, target: unknown): string | undefined {
+  if (typeof target === 'string') {
+    return target;
+  }
+  if (typeof target === 'object' && target !== null && 'kind' in target && target.kind === 'env') {
+    return deps.store.selected().name;
+  }
+  return undefined;
+}
+
+function isHue(value: unknown): value is EnvironmentHue {
+  return ENVIRONMENT_HUES.some((hue) => hue === value);
+}
+
+const HUE_LABELS: Record<EnvironmentHue, string> = {
+  green: 'Green',
+  blue: 'Blue',
+  purple: 'Purple',
+  yellow: 'Yellow',
+  orange: 'Orange',
+  red: 'Red',
+};
+
+/**
+ * Set an environment's colour (local's too) in `mmk.environments`: the one it's drawn in, in the
+ * sidebar, the console and the status bar. Returns the colour, or undefined when cancelled.
+ */
+async function setEnvironmentColor(
+  deps: Deps,
+  name?: string,
+  chosen?: EnvironmentHue,
+): Promise<EnvironmentHue | undefined> {
+  let environment = name === undefined ? undefined : deps.store.environment(name);
+  if (!environment) {
+    const picked = await vscode.window.showQuickPick(
+      deps.store.environments().map((candidate) => ({
+        label: candidate.name,
+        description: HUE_LABELS[environmentHue(candidate.color)],
+        environment: candidate,
+      })),
+      { title: 'mmk: Change environment colour' },
+    );
+    environment = picked?.environment;
+  }
+  if (!environment) {
+    return undefined;
+  }
+  const current = environmentHue(environment.color);
+  const hue =
+    chosen ??
+    (
+      await vscode.window.showQuickPick(
+        ENVIRONMENT_HUES.map((candidate) => {
+          const background = statusBarBackground(candidate);
+          return {
+            label: HUE_LABELS[candidate],
+            description: [
+              candidate === current ? 'current' : '',
+              background === 'default' ? '' : `status bar: ${background} background`,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            hue: candidate,
+          };
+        }),
+        {
+          title: `mmk: Colour for ${environment.name}`,
+          placeHolder: 'Shown in the sidebar, the console and the status bar',
+        },
+      )
+    )?.hue;
+  if (!hue) {
+    return undefined;
+  }
+  await deps.environments.writeEntry({ name: environment.name, color: hue });
+  deps.environments.load();
+  return hue;
 }
 
 async function selectByName(deps: Deps, name: string): Promise<string | undefined> {
@@ -110,7 +198,9 @@ function environmentNote(
   const statuses = projects.map((project) => project.environments[environment.name]);
   const parts: string[] = [];
   if (environment.readOnly) {
-    parts.push(environment.color === 'error' ? 'read-only · protected' : 'read-only');
+    parts.push(
+      statusBarBackground(environment.color) === 'error' ? 'read-only · protected' : 'read-only',
+    );
   }
   if (statuses.length > 0 && statuses.every((status) => status && !status.connected)) {
     parts.push('not set up: run "mmk: Edit environment…"');
@@ -137,9 +227,74 @@ function environmentNote(
 }
 
 /**
- * Add an environment: name → connection string (masked) → database → test connection →
- * read-only. The connection goes to the OS keychain; settings get only the name and flags.
- * Returns the name, or undefined when cancelled.
+ * Open the console's *Add environment* dialog (C13) for a project: name, database, the
+ * connection string (masked), read-only, colour and a connection test, in one form. Returns the
+ * console, for tests.
+ */
+async function openAddDialog(dir: string | undefined): Promise<ConsolePanel | undefined> {
+  const panel = await vscode.commands.executeCommand<ConsolePanel | undefined>(
+    'mmk.openConsole',
+    dir === undefined ? undefined : { dir },
+  );
+  await panel?.receive({ type: 'addEnvironment' });
+  return panel;
+}
+
+/** Keep a new environment: its connection in the OS keychain, its name and flags in settings */
+export async function saveEnvironment(
+  deps: Deps,
+  dir: string,
+  entry: { name: string; readOnly: boolean; color?: EnvironmentHue },
+  connection: Connection,
+): Promise<void> {
+  await deps.environments.saveConnection(dir, entry.name, connection);
+  await deps.environments.writeEntry(entry);
+  deps.environments.load();
+}
+
+/** What a connection test found: the migrations mmk read there, or mmk's error as is */
+export type ConnectionCheck =
+  | { ok: true; migrations: number; pending: number }
+  | { ok: false; message: string };
+
+/**
+ * Test a connection with `mmk status --json`, the project's own mmk, as every read does. Shows
+ * nothing: the caller says how it went.
+ */
+export async function checkConnection(
+  deps: Deps,
+  project: ProjectSnapshot,
+  name: string,
+  connection: Connection,
+): Promise<ConnectionCheck> {
+  if (project.state.kind !== 'ready') {
+    return { ok: false, message: project.state.message };
+  }
+  try {
+    const output = await runMmkJson(project.state.invocation, ['status'], {
+      env: connectionEnv(connection),
+      timeoutMs: 60_000,
+      onStderrLine: (line) => deps.log.mmkOutput(line, 'debug'),
+    });
+    const rows = parseStatusRows(output.value, 'status');
+    return {
+      ok: true,
+      migrations: rows.length,
+      pending: rows.filter((row) => row.status === 'pending').length,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    deps.log.warn(
+      `Testing ${name}: ${error instanceof MmkCommandError && error.failure.code ? `${error.failure.code}: ` : ''}${message}`,
+    );
+    return { ok: false, message };
+  }
+}
+
+/**
+ * Add an environment from a command's arguments (scripts and tests): any missing value is asked
+ * for, the connection is tested, then kept in the OS keychain; settings get only the name and
+ * flags. Returns the name, or undefined when cancelled.
  */
 async function addEnvironment(deps: Deps, args: AddArgs): Promise<string | undefined> {
   const project = await resolveProject(
@@ -181,9 +336,7 @@ async function addEnvironment(deps: Deps, args: AddArgs): Promise<string | undef
     return undefined;
   }
 
-  await deps.environments.saveConnection(project.dir, name.trim(), connection);
-  await deps.environments.writeEntry({ name: name.trim(), readOnly });
-  deps.environments.load();
+  await saveEnvironment(deps, project.dir, { name: name.trim(), readOnly }, connection);
   void vscode.window
     .showInformationMessage(
       `Added ${name.trim()} (${hostLabel(connection.uri, connection.dbName)}${readOnly ? ', read-only' : ''}). Its connection string is in the OS keychain, not in settings.`,
@@ -209,7 +362,6 @@ async function askConnection(
   project: ProjectSnapshot,
   name: string,
   args: AddArgs,
-  current?: Connection,
 ): Promise<Connection | undefined> {
   for (;;) {
     const uri =
@@ -234,7 +386,7 @@ async function askConnection(
       (await vscode.window.showInputBox({
         title: `mmk: ${name} (3/4) · database`,
         prompt: 'The database whose changelog mmk reads (MMK_DB)',
-        value: databaseFromUri(uri) ?? current?.dbName ?? '',
+        value: databaseFromUri(uri) ?? '',
         ignoreFocusOut: true,
         validateInput: (value) => (value.trim() === '' ? 'Type the database name' : null),
       }));
@@ -275,37 +427,20 @@ async function testConnection(
   name: string,
   connection: Connection,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (project.state.kind !== 'ready') {
-    return { ok: false, message: project.state.message };
+  const check = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `mmk: testing the connection to ${name}…`,
+    },
+    () => checkConnection(deps, project, name, connection),
+  );
+  if (!check.ok) {
+    return check;
   }
-  const { invocation } = project.state;
-  try {
-    const output = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `mmk: testing the connection to ${name}…`,
-      },
-      () =>
-        runMmkJson(invocation, ['status'], {
-          env: connectionEnv(connection),
-          timeoutMs: 60_000,
-          onStderrLine: (line) => deps.log.mmkOutput(line, 'debug'),
-        }),
-    );
-    const rows = parseStatusRows(output.value, 'status');
-    const applied = rows.filter((row) => row.status === 'applied').length;
-    const pending = rows.filter((row) => row.status === 'pending').length;
-    void vscode.window.showInformationMessage(
-      `Connected to ${name} · ${applied} applied, ${pending} pending`,
-    );
-    return { ok: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    deps.log.warn(
-      `Testing ${name}: ${error instanceof MmkCommandError && error.failure.code ? `${error.failure.code}: ` : ''}${message}`,
-    );
-    return { ok: false, message };
-  }
+  void vscode.window.showInformationMessage(
+    `Connected to ${name} · ${check.migrations - check.pending} applied, ${check.pending} pending`,
+  );
+  return { ok: true };
 }
 
 /** Read-only is on by default for anything but local */
@@ -348,57 +483,35 @@ async function pickRemote(deps: Deps, title: string): Promise<Environment | unde
 }
 
 /** Change an environment's connection or read-only flag, or remove it */
-async function editEnvironment(deps: Deps, name?: string): Promise<void> {
+/**
+ * Open the console's dialog for an environment (C13's form, in edit mode): its database,
+ * connection string, read-only flag and colour, and *Remove*. local has only its colour, since
+ * its connection is the project's config. Returns the console, for tests.
+ */
+async function editEnvironment(deps: Deps, name?: string): Promise<ConsolePanel | undefined> {
   const environment =
     name === undefined
-      ? await pickRemote(deps, 'mmk: Edit environment')
+      ? await pickAny(deps, 'mmk: Edit environment')
       : deps.store.environment(name);
-  if (!environment || environment.local) {
-    return;
+  if (!environment) {
+    return undefined;
   }
-  const action = await vscode.window.showQuickPick(
-    [
-      { label: '$(key) Change connection string…', id: 'connection' },
-      environment.readOnly
-        ? { label: '$(unlock) Allow runs…', id: 'writable' }
-        : { label: '$(lock) Make read-only', id: 'readOnly' },
-      { label: '$(trash) Remove…', id: 'remove' },
-    ],
-    { title: `mmk: Edit ${environment.name}` },
+  const panel = await vscode.commands.executeCommand<ConsolePanel | undefined>('mmk.openConsole');
+  await panel?.receive({ type: 'editEnvironment', name: environment.name });
+  return panel;
+}
+
+/** Pick any environment, local included */
+async function pickAny(deps: Deps, title: string): Promise<Environment | undefined> {
+  const picked = await vscode.window.showQuickPick(
+    deps.store.environments().map((environment) => ({
+      label: environment.name,
+      description: environment.readOnly ? 'read-only' : 'writable',
+      environment,
+    })),
+    { title },
   );
-  if (action?.id === 'connection') {
-    const project = await resolveProject(deps, undefined);
-    if (!project) {
-      return;
-    }
-    const current = await deps.environments.connection(project.dir, environment.name);
-    const connection = await askConnection(
-      deps,
-      project,
-      environment.name,
-      {},
-      current ?? undefined,
-    );
-    if (connection) {
-      await deps.environments.saveConnection(project.dir, environment.name, connection);
-      void vscode.window.showInformationMessage(
-        `Saved ${environment.name}'s connection for ${path.basename(project.dir)} in the OS keychain.`,
-      );
-    }
-  } else if (action?.id === 'readOnly') {
-    await deps.environments.writeEntry({ name: environment.name, readOnly: true });
-  } else if (action?.id === 'writable') {
-    const confirmed = await deps.confirm(
-      `Allow runs on ${environment.name}?`,
-      `Run links and the sidebar will offer up, down and redo on ${environment.name}. Each still asks first.`,
-      'Allow runs',
-    );
-    if (confirmed) {
-      await deps.environments.writeEntry({ name: environment.name, readOnly: false });
-    }
-  } else if (action?.id === 'remove') {
-    await removeEnvironment(deps, environment.name);
-  }
+  return picked?.environment;
 }
 
 /** Remove an environment from settings and its connections from the keychain */

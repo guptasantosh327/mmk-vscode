@@ -7,8 +7,12 @@
 //   npm run bundle && node scripts/media/record.mjs
 //   MEDIA_SCENES=local-workflow,environments node scripts/media/record.mjs   # some scenes only
 //
-// Output: media/readme/*.gif. It needs the next mongo-migrate-kit (see docs/MMK-REQUESTS.md)
-// for the edit warning.
+// Output: media/readme/*.gif. It needs mongo-migrate-kit 1.6 or later (the pinned devDependency)
+// for the edit warning and the console's lock line. To record with another build, point
+// MEDIA_MMK_MODULES at a node_modules folder that has it (the demo project gets it as its own
+// node_modules), e.g.
+//
+//   MEDIA_MMK_MODULES=.vscode-test/playground/shop-api/node_modules node scripts/media/record.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import {
   existsSync,
@@ -17,11 +21,13 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
+import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { connect, sleep } from './chrome.mjs';
 
@@ -41,7 +47,13 @@ try {
 const root = resolve(import.meta.dirname, '../..');
 const output = join(root, 'media/readme');
 const demo = join(root, '.vscode-test/readme-demo/shop-api');
-const mmk = join(root, 'node_modules/mongo-migrate-kit/dist/mmk.cjs');
+/** Where the demo project's mongo-migrate-kit comes from (see the top of this file) */
+const mmkModules = process.env.MEDIA_MMK_MODULES ? resolve(process.env.MEDIA_MMK_MODULES) : null;
+const mmk = join(mmkModules ?? join(root, 'node_modules'), 'mongo-migrate-kit/dist/mmk.cjs');
+/** The scenes to record (MEDIA_SCENES, comma-separated); all of them by default */
+const scenes = (
+  process.env.MEDIA_SCENES || 'local-workflow,environments,applied-edit,console'
+).split(',');
 // The IPC socket path must stay short: macOS's per-user temp folder is too deep for it.
 const scratch = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'mmk-media-'));
 const requests = join(scratch, 'requests');
@@ -112,7 +124,7 @@ const MIGRATIONS = {
       .createIndex({ customerId: 1, createdAt: -1 }, { name: 'orders_by_customer_date' });
   },
   async down({ db }) {
-    await db.collection('orders').dropIndex('customerId_1_createdAt_-1');
+    await db.collection('orders').dropIndex('orders_by_customer_date');
   },
 };
 `,
@@ -174,6 +186,34 @@ function prepare(uri) {
   // After it ran everywhere, someone edits the backfill and commits it.
   writeFileSync(join(demo, 'migrations', backfill), BACKFILL_EDITED);
   git('commit', '-q', '-am', 'Use pending as the default order status');
+
+  if (mmkModules) {
+    symlinkSync(mmkModules, join(demo, 'node_modules'), 'dir');
+    writeFileSync(join(demo, '.git/info/exclude'), 'node_modules\n');
+  }
+}
+
+/**
+ * Orders on local, so the console's run takes long enough to show mmk's output as it comes: the
+ * region backfill and the customer-date index then each take a moment, as on a real database.
+ */
+async function seedOrders(uri) {
+  const client = await MongoClient.connect(uri);
+  try {
+    const orders = client.db('orders_dev').collection('orders');
+    const start = Date.UTC(2026, 0, 1);
+    for (let batch = 0; batch < 20; batch += 1) {
+      await orders.insertMany(
+        Array.from({ length: 10_000 }, (_, i) => ({
+          customerId: (batch * 10_000 + i) % 4_000,
+          createdAt: new Date(start + (batch * 10_000 + i) * 60_000),
+          total: ((batch * 10_000 + i) % 500) + 10,
+        })),
+      );
+    }
+  } finally {
+    await client.close();
+  }
 }
 
 /** Answer the driver's requests: frames, typing and keys, over the DevTools protocol */
@@ -246,6 +286,9 @@ let code = null;
 try {
   const uri = replSet.getUri();
   prepare(uri);
+  if (scenes.includes('console')) {
+    await seedOrders(uri);
+  }
   mkdirSync(requests, { recursive: true });
   mkdirSync(frames, { recursive: true });
 
@@ -315,7 +358,6 @@ try {
   await serve(page, finished);
   page.close();
   code = await exited;
-  const scenes = (process.env.MEDIA_SCENES || 'local-workflow,environments,applied-edit').split(',');
   for (const name of scenes) {
     encode(name);
   }

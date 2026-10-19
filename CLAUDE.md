@@ -1,4 +1,4 @@
-# CLAUDE.md — mmk for VS Code
+# CLAUDE.md — Mongo Migrate Kit for VS Code
 
 > Read this file **completely** before writing code. It loads every session.
 > The plan is in `docs/PLAN.md`, the design in `design/SCREENS.md`, and the core changes this
@@ -10,36 +10,48 @@
 
 > Keep this block short and current. Update it at the end of every phase.
 
-- **Current phase:** **1.0.0 ready to publish** (2026-10-18) on `release/1.0` (stacked on
-  `feat/environments` → `feat/applied-file-protection` → `feat/rollback-tests`), none pushed.
-  Phases 3, 4 and 6 are in; Phase 5 (rollback tests, lint) was built and then dropped at the
-  owner's request. **Release order (owner's decision):** the extension first, against
-  mongo-migrate-kit 1.5.0; mmk's next release later, after the owner tests it. On 1.5 the
-  applied-file warning and read-only database users stay off and switch on by themselves with an
-  mmk that has R5 / R3. `docs/RELEASE.md` has the steps.
+- **1.1.0 ready to publish** (branch `feat/console`, stacked on `chore/rename-mongo-migrate-kit`,
+  pushed, no pull request yet). The first release as **Mongo Migrate Kit**, the
+  library's name, with a new ID, `guptasantosh327.mongo-migrate-kit` (owner's decision); 1.0.1,
+  the rename alone, was never published. It brings Phase 7 (the migration console and the
+  pipeline sidebar, `docs/PLAN.md`) and what mongo-migrate-kit 1.6.0 switches on. 1.0.0 went out
+  as `guptasantosh327.mmk-vscode` ("mmk for VS Code"), retired after 1.1.0 ships. In-editor labels
+  stay `mmk`, the CLI's name. **Release order (owner, 2026-10-18):** mongo-migrate-kit 1.6.0
+  (published 2026-10-19), pinned here (done, `docs/RELEASE.md` step 2), then publish 1.1.0
+  (step 3, next), then fix mmk's docs page about the extension (R8 follow-up, step 4). The
+  extension still supports 1.5.0: there the applied-file warning, read-only database users and
+  the lock UI stay off. R12 is open, not built. Phase 5 (rollback tests, lint) was built and then
+  dropped.
 - **Developing against unreleased mmk:** see `docs/MMK-REQUESTS.md` (top): merge the request
-  branches in a throwaway clone, stamp it `1.6.0-dev.0`, `npm pack`, then
-  `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
-  `test/contract/harness.ts`. `npm ci` puts the pinned 1.5.0 back; check both before committing.
+  branches into mmk's `main` in a throwaway clone, stamp it with the next version plus `-dev.0`,
+  `npm pack`, then `npm install --no-save <tarball>` here. Contract tests switch on `NEXT_MMK` in
+  `test/contract/harness.ts`. `npm ci` puts the pin back; check both before committing.
 - **Repo:** github.com/guptasantosh327/mmk-vscode (push over HTTPS; `gh` here is logged in as
   santosh-lodha, which can read the repo's CI runs but not push).
-- **mmk version the contract tests pin:** 1.5.0. CI runs every suite on the pin and on
-  `MIN_MMK_VERSION` (1.5.0), and a contract test keeps that matrix and the constant in step.
-- **MMK requests released so far:** none (`docs/MMK-REQUESTS.md`). Built, not released: R2 on
-  MMK_REPO branch `feat/config-json`; R9 and R10 on `feat/json-output`; R3 on
-  `feat/read-only-reads`; R5 on `feat/status-checksum`; R8 on `feat/vscode-docs`. R4 (optional)
-  isn't built. **R6 and R7 were dropped** (owner, 2026-10-18): their branches `feat/test-rollback`
-  and `feat/lint` stay unmerged, and Phase 5 (rollback tests, lint) isn't in the extension.
-- **Before the 1.0 release:** the publisher ID `guptasantosh327` (confirmed) must exist on
-  the VS Code Marketplace, plus a matching namespace on Open VSX. The extension ID in tests
-  (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) follows `publisher`.
+- **mmk version the contract tests pin:** 1.6.0. CI runs every suite on the pin and on
+  `MIN_MMK_VERSION` (1.5.0), and a contract test keeps that matrix and the constant in step. The
+  typecheck runs on the pin only: the extension imports types 1.5.0 doesn't export
+  (`ConfigSummary`, `LockStatus`, `StatusRow.checksum`).
+- **MMK requests released:** R2, R3, R5, R8, R9, R10 and R11 in mongo-migrate-kit 1.6.0 (PRs
+  #11–#16, published 2026-10-19). R8's page is live but still names the old extension: fix it
+  after 1.1.0 ships. R4 (optional) isn't built. **R6 and R7 were dropped**
+  (owner, 2026-10-18): their branches `feat/test-rollback` and `feat/lint` stay unmerged, and
+  Phase 5 (rollback tests, lint) isn't in the extension.
+- **Extension ID:** `guptasantosh327.mongo-migrate-kit` (`publisher`.`name`). The publisher exists
+  on the VS Code Marketplace; Open VSX needs a matching namespace. The ID in tests
+  (`test/integration/helpers.ts`, `test/integration/run-installed.mjs`) and
+  `scripts/media/driver.cjs` follows it. `name` matches the devDependency mongo-migrate-kit; npm
+  allows that, and nothing resolves it to the extension itself as long as package.json has no
+  `exports`.
 - **Commits** carry only the owner's name: no Claude co-author trailer.
 - **Test hooks:** `activate()` returns `MmkTestApi` (store, idle, sidebar text, setConfirm,
   environments, checkBranch) only in `ExtensionMode.Test`; integration tests use it to answer the
   modals and read the tree. Commands that ask questions also take an argument object that skips
   them (`mmk.createMigration`, `mmk.addEnvironment`).
-- **README media:** recorded from the real extension by `scripts/media/record.mjs` (needs the
-  next mmk and `npm i --no-save gifenc@1.0.3 pngjs@7.0.0`). Never edit the images by hand.
+- **README media:** recorded from the real extension by `scripts/media/record.mjs` (needs
+  mongo-migrate-kit 1.6 or later, for the edit warning, and
+  `npm i --no-save gifenc@1.0.3 pngjs@7.0.0`). Never edit the images by hand. Last recorded
+  2026-10-18 with the console.
 - **Testing gotchas:** a development extension is exempt from Workspace Trust and
   `@vscode/test-electron` always passes `--disable-workspace-trust`, so trust is tested on the
   installed `.vsix` (`test/integration/run-installed.mjs`). Run from a VS Code terminal, the
@@ -203,6 +215,9 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
 │   │   ├── log.ts               # Logger over the LogOutputChannel, masking credentials
 │   │   ├── environments.ts      # mmk.environments, read-only rule (assertCanRun), MMK_URI/MMK_DB
 │   │   ├── matrix.ts            # files × environments from each one's status rows (C2)
+│   │   ├── console.ts           # the migration console's model, plan and result (Phase 7)
+│   │   ├── pipeline.ts          # the environments pipeline's model (Phase 7, design B)
+│   │   ├── lock-holder.ts       # who holds an environment's lock (mmk lock, R11), worded for the views
 │   │   └── redact.ts            # mask credentials in anything logged
 │   ├── git/                     # NO vscode imports
 │   │   ├── git.ts               # runGit (execFile, bytes out)
@@ -218,7 +233,8 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
 │   │   ├── applied-protection.ts # B1/B2: diagnostic, hover, mmk-applied: docs, diff, restore
 │   │   ├── statusbar.ts
 │   │   ├── branch-watch.ts      # after a checkout: local migrations from another branch
-│   │   └── matrix/panel.ts      # webview (C2); its HTML/JS/CSS are in media/matrix/
+│   │   ├── pipeline.ts          # the pipeline webview view; its JS/CSS are in media/pipeline/
+│   │   └── console/panel.ts     # the migration console webview; its JS/CSS are in media/console/
 ├── test/
 │   ├── unit/                    # vitest
 │   ├── contract/                # real mmk + mongodb-memory-server
@@ -257,7 +273,7 @@ vitest. Only `src/extension.ts`, `src/commands/**` and `src/views/**` import `vs
   They're never written to settings.json or logs. If settings.json contains `mongodb://user:pass@`,
   warn and offer to move it to the keychain.
 - **Read-only environments** (staging and prod by default) only ever run read commands: `status`,
-  `list`, `dry-run`, `status --all-namespaces`. Write commands are only offered on environments
+  `list`, `dry-run`, `status --all-namespaces`, `lock`. Write commands are only offered on environments
   marked writable (by default only `local`).
 
 ---

@@ -1,6 +1,6 @@
-# Plan — mmk for VS Code
+# Plan — Mongo Migrate Kit for VS Code
 
-Six phases. **Each phase ends when its exit criteria pass**: lint, typecheck, unit, contract and
+Seven phases. **Each phase ends when its exit criteria pass**: lint, typecheck, unit, contract and
 integration tests are green. At that point, say `PHASE N COMPLETE`, update `CLAUDE.md` §0, and wait
 for the go-ahead. Don't start the next phase early. This is the same discipline as mongo-migrate-kit's
 own build.
@@ -17,6 +17,7 @@ ID from `docs/MMK-REQUESTS.md`. A phase can't finish until its requests are **re
 | 4 | Applied-file protection | B1, B2 | R5 |
 | 5 | ~~Rollback tests + lint~~ dropped | ~~A4~~ | ~~R6, R7~~ |
 | 6 | Stable 1.0 release | — | R8 |
+| 7 | Migration console + pipeline sidebar | C1–C13, B (canvas) | R11, R12 (both optional) |
 
 ---
 
@@ -113,6 +114,9 @@ before a failure, for A3).
 6. **Confirmations:** `down`, `redo` and `--force` ask in a modal first. `--force` always passes `--yes`,
    because the extension confirmed already.
 7. **Results:** a notification with mmk's outcome (A3), and mmk's log in the output channel.
+   *Changed (owner, 2026-10-18):* a run that succeeds no longer gets a notification, and its
+   progress shows in the status bar instead of a notification; the views show the result.
+   Failures and runs that did nothing still get one.
 8. **Explorer badges** (`FileDecorationProvider`): `●` pending on local.
 9. **Copy CLI command** on every action.
 10. **Lock held:** show the holder from the error. Offer "Unlock…" (modal) → `mmk unlock --yes --json`.
@@ -254,15 +258,15 @@ matching commit's version.
   with the BOM put back when the file on disk has one: reading the file's first bytes replaces
   `TextDocument.encoding`, which `engines.vscode ^1.90` doesn't have. `checksum.contract.test.ts`
   checks LF, CRLF, BOM, BOM + CRLF and non-ASCII files against the checksum mmk wrote, read
-  from the changelog directly (so it runs on 1.5 too), and against `StatusRow.checksum` on the
-  next mmk.
+  from the changelog directly (so it runs on 1.5 too), and against `StatusRow.checksum` from
+  mmk 1.6.
 - Every environment's rows are compared, not only the selected one: the warning names each
   environment whose recorded checksum differs (`src/mmk/applied-edits.ts`).
 - The changed range is the diff against the file on disk while that is still the version that
   ran (an unsaved edit), otherwise against the version found in git. Until git answers, it's the
   line of `up()`.
-- With an mmk that reports no checksums (1.5), nothing warns; editing an applied file says once
-  per project that a newer mongo-migrate-kit adds the warning.
+- With an mmk that reports no checksums (1.5), nothing warns. mongo-migrate-kit 1.6.0 reports
+  them (R5), and the warning switches on by itself.
 - The applied version is found with one `git log --follow --name-only` and one
   `git cat-file --batch` over every version of the file. The newest commit whose content hashes
   to the recorded checksum wins, so a pure rename commit counts as that version.
@@ -312,3 +316,122 @@ Say so in the README.
 - CI runs every suite on the pinned mongo-migrate-kit and on `MIN_MMK_VERSION` (1.5.0); a contract
   test keeps the matrix and the constant in step.
 - Publishing is the owner's step: `docs/RELEASE.md` lists it, after releasing mongo-migrate-kit.
+
+---
+
+## Phase 7 — Migration console and pipeline sidebar
+
+**Goal:** one place to see every migration on every environment and act on it, plus the
+environments as a pipeline in the sidebar. Design: the canvas
+<https://claude.ai/artifact/HkfYg1uFrqRcdXYekFnXSg>, page **C · Flows** (C1–C13 and the flow map)
+and frame **B** on page **Directions**. Drawn in VS Code's theme colours only: the owner chose
+them over the custom looks on page **C · Styles** (2026-10-18). `design/SCREENS.md` has the notes.
+
+**Needs from mmk:** nothing that isn't released. Optional: **R11** (who holds the lock, from a
+command that doesn't release it) and **R12** (the batch a run would record, in `dry-run`). Until
+they're released, the console shows the lock only when a run reports `LOCK_ALREADY_HELD`, and the
+plan says "as one new batch" without a number. *R11 was built for mongo-migrate-kit 1.6.0 at the
+owner's request (2026-10-19); see "Lock UI" below.*
+
+**Tasks**
+1. **Console (C1–C4):** the environments matrix grows into the migration console, one editor tab
+   per project. "mmk: Open migration console" opens it; "Compare all environments" opens it with
+   *Only differences*. It has the project and branch, environment tabs (picking one selects it for
+   every command, as the status bar does), filters (*All*, *Pending*, *Needs attention*, *Only
+   differences*), files from your branch or `origin/main` (as in Phase 3), the migrations ×
+   environments table (`buildMatrix`), a detail panel for the selected migration (its record on
+   each environment, the actions the selected environment allows, the CLI command), and the
+   selected environment's batches (`buildStatusModel`).
+2. **Actions** run the existing commands with `{ dir, file }`: up, down, redo, dry run, copy CLI
+   command, show applied version, create. The read-only rule, the confirmations and the results
+   stay where they are.
+3. **Roll back a batch (C9):** `mmk down --batch N --json` (mmk 1.5 has it), after a modal that
+   names every file in the batch. A new command, `mmk.downBatch`, with a contract test for its JSON.
+4. **Plan, running, result (C6–C8)** inside the console: the plan is `dry-run up`'s rows; *Apply*
+   runs `up`; while it runs, mmk's own output streams into the panel (no Stop: halting a migration
+   midway could leave data half-changed); the result lists each `RunResult`, and on a failure
+   shows mmk's error as is, with what ran before it from R10's `details.results` (on 1.5, from a
+   status read).
+5. **When something needs you (C10–C12):** an edited file links to *Show applied version* (R5);
+   `LOCK_ALREADY_HELD` shows mmk's message and *Release the lock…* (the existing unlock); an
+   environment that can't be read shows mmk's error as is, with *Try again*, *Edit connection* and
+   *Show output*. *Add environment* (C13) stays the existing command.
+6. **Pipeline sidebar (B):** a webview view at the top of the mmk container: each environment as a
+   step (pending count, read-only, the latest migration applied, the lock once R11 is released),
+   the selected environment's pending migrations, and *Review N pending on <env>*, which opens the
+   console's plan. The tree stays below it for keyboard users.
+7. **Theme:** only `--vscode-*` variables and codicons, nothing hard-coded (CLAUDE.md §4 and §8).
+
+**Tests:** unit tests for the console model (filters, the detail for each state and environment,
+which actions are offered, history); a contract test for `down --batch`; integration tests that
+open the console, select a migration, run up from it, offer no write action on a read-only
+environment, and need the modal before rolling back a batch.
+
+**Exit criteria:** from the console alone, plan and apply local's pending migrations, roll back a
+batch and compare every environment, with nothing written to a read-only environment.
+
+**PHASE 7 COMPLETE** (2026-10-18): every exit criterion is covered by an integration test
+(plan and apply, batch rollback behind its modal, comparison, a read-only plan that writes
+nothing). R11 and R12 stay optional and open.
+
+**Lock UI** (owner, 2026-10-19: "the extension doesn't have any UI for the lock"): with R11
+(`mmk lock --json`, mongo-migrate-kit 1.6.0) the store reads each environment's lock next to its
+status (`readLock`; asked once and dropped on an mmk without the command). A lock in force shows
+on the environment's pipeline card, as a notice in the console (*Release the lock…* on writable
+environments, which runs the existing `mmk.unlock` with its modal), on the console's tab, in the
+tree (click to release, writable only) and in the status bar (`$(watch) … · locked`). A lock mmk
+reports stale isn't shown: the next run takes it over. The project's own run is never shown as a
+lock. Icon: `watch`, since `lock` already means read-only. Tests: unit (parser, wording, models,
+store), contract (`lock --json` while a slow run holds the lock; 1.5's unknown command), and an
+integration test that shows another run's lock everywhere and releases it from the console.
+
+**Redesigned** (owner, 2026-10-19: "the lock and the checksum notice take turns", and the edited
+notice needs a way to close): design **A** from the canvas page "Lock & notices". The lock left the
+notices for a line under the tabs (`ConsoleModel.environment`, with a details popover), run
+buttons are greyed out with the reason (`ConsoleButton.disabled`; the panel refuses them too),
+Apply in a plan waits for it, and the sidebar card shows "Locked by ci · 4 min" with an amber ring.
+Notices are a list (`notices`) and never take turns; the edited one has *Dismiss*, kept in
+workspace state per record (`editedKey`: environment, file, `appliedAt`), so it comes back only
+when that migration runs again. **Add environment** became C13's dialog in the console
+(`mmk.addEnvironment` without arguments; with them, the old prompts, for scripts and tests): one
+form, a `mmk status` test (`checkConnection`), and `saveEnvironment` to the keychain and settings.
+The connection string is never in the view sent to the webview (an integration test checks).
+**Edit and remove** (owner, 2026-10-19: "no option to edit or delete the environment") use the
+same dialog in edit mode: `mmk.editEnvironment` opens it (the console's line, the pipeline card's
+gear, the tree row, the palette); an empty connection string keeps the stored one; a changed one
+is tested; allowing runs and *Remove* confirm first; `local` edits only its colour
+(`EnvironmentRegistry.updateEntry`, where a null colour goes back to the default).
+
+*Built as:*
+- **Task 1 and 2 (C1–C4):** `src/mmk/console.ts` builds the console from `buildMatrix` and
+  `buildStatusModel`: tabs with each environment's pending and needs-attention counts, the four
+  filters, the rows, the picked migration (the user's pick, else the first pending on the selected
+  environment) with its record on each environment, the buttons the selected environment allows,
+  the CLI arguments, the latest three batches, and a notice (read-only, or files edited after they
+  ran). It decides nothing about migrations: every state is a matrix cell, so mmk's verdict.
+- The matrix panel became `src/views/console/panel.ts` (`media/console/`); `mmk.openConsole`
+  opens it and `mmk.compareEnvironments` opens it on *Only differences*. The webview's messages
+  are checked field by field (`isConsoleMessage`), and an action runs only if the picked
+  migration's detail offers it, through the existing `mmk.*` command with `{ dir, file }`.
+- The CLI line is Copy CLI command's: `terminalCommand`, and on another environment `MMK_URI`
+  as a placeholder and `MMK_DB` from the stored connection.
+- **Task 3 (C9):** `mmk.downBatch` ("Roll back a batch…") runs `mmk down --batch N` on the
+  selected environment after a modal naming every file in the batch (from its status rows); with
+  no batch given it offers the environment's batches. A contract test pins the JSON (reverted
+  newest first) and mmk's `INVALID_ARGUMENT` for a batch that isn't there.
+- **Task 4 (C6–C8):** *Plan* reads `dry-run up` through the store (a read, allowed everywhere).
+  *Apply* goes through `applyPending` in `src/commands/run.ts`: the same read-only refusal and
+  remote confirmation as *Apply all*, but it returns the outcome instead of a notification.
+  `buildResult` lays out mmk's results; when mmk stops early without them (1.5, before R10), what
+  ran comes from the status read after the run, never from a guess. The store emits mmk's stderr
+  lines (`onDidOutput`, credentials hidden), so a run from anywhere shows live in the console.
+- **Task 5 (C10–C12):** edited files link to *Show applied version*; a result with
+  `LOCK_ALREADY_HELD` offers *Release the lock…* (the existing unlock, with its modal); an
+  environment that can't be read shows mmk's message as is, with *Try again*, *Edit connection*
+  (not for local, whose connection comes from the project) and *Show output*. Counts and batches
+  of an unreadable environment aren't shown.
+- **Task 6 (B):** `src/mmk/pipeline.ts` builds the pipeline from the same matrix inputs as the
+  console (`matrixInputs`); `src/views/pipeline.ts` is a `WebviewView` (`mmk.pipeline`) above the
+  tree. *Review* opens the console and its plan; picking a migration opens the console on it.
+- Both webviews were checked in headless Chrome with Dark Modern's colours (no script errors;
+  C1–C4, C6–C8, C11, C12 and B as drawn). Integration tests drive them through `receive()`.

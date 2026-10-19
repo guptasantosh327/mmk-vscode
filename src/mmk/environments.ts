@@ -6,15 +6,27 @@ import { redactMongoUri } from './redact.js';
  */
 export const LOCAL_ENVIRONMENT = 'local';
 
-/** The status bar backgrounds VS Code allows: the default one, warning or error */
-export type EnvironmentColor = 'default' | 'warning' | 'error';
+/**
+ * The colours an environment can be drawn in: VS Code's chart colours (`charts.*`), which every
+ * theme defines, so they stay readable in light, dark and high-contrast themes.
+ */
+export const ENVIRONMENT_HUES = ['green', 'blue', 'purple', 'yellow', 'orange', 'red'] as const;
+
+/** One of {@link ENVIRONMENT_HUES} */
+export type EnvironmentHue = (typeof ENVIRONMENT_HUES)[number];
+
+/**
+ * An environment's colour in `mmk.environments`: a hue, or one of the setting's first values
+ * (`default`, `warning`, `error`), which still work.
+ */
+export type EnvironmentColor = EnvironmentHue | 'default' | 'warning' | 'error';
 
 /** An environment the extension reads, and writes to only when it isn't read-only */
 export interface Environment {
   name: string;
   /** Read-only environments only ever run `status`, `list`, `dry-run` and `config` */
   readOnly: boolean;
-  /** The status bar background while it's selected */
+  /** Its colour in the sidebar, the console and the status bar */
   color: EnvironmentColor;
   /** True for `local`: the project's own config, no stored connection */
   local: boolean;
@@ -49,7 +61,14 @@ export interface EnvironmentSettings {
 }
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,31}$/;
-const COLORS: Record<EnvironmentColor, true> = { default: true, warning: true, error: true };
+const COLORS: ReadonlySet<string> = new Set<EnvironmentColor>([
+  ...ENVIRONMENT_HUES,
+  'default',
+  'warning',
+  'error',
+]);
+/** The hues an environment that isn't local or named like prod gets by default, in turn */
+const DEFAULT_HUES: readonly EnvironmentHue[] = ['yellow', 'blue', 'purple', 'orange'];
 const CONNECTION_KEYS = ['uri', 'url', 'connectionString', 'mongoUri', 'MMK_URI'] as const;
 const DATABASE_KEYS = ['dbName', 'db', 'database', 'MMK_DB'] as const;
 
@@ -70,6 +89,8 @@ export function parseEnvironmentSettings(value: unknown): EnvironmentSettings {
   }
 
   const byName = new Map<string, Environment>();
+  /** Entries without a colour of their own get one once every explicit colour is known */
+  const uncoloured = new Set<string>();
   for (const [index, entry] of entries.entries()) {
     if (!isRecord(entry) || typeof entry.name !== 'string') {
       problems.push(
@@ -104,38 +125,94 @@ export function parseEnvironmentSettings(value: unknown): EnvironmentSettings {
     }
     const local = name === LOCAL_ENVIRONMENT;
     const color = entry.color;
-    if (color !== undefined && !(typeof color === 'string' && color in COLORS)) {
+    const valid = typeof color === 'string' && COLORS.has(color);
+    if (color !== undefined && !valid) {
       problems.push(
-        `Environment "${name}": "color" should be "default", "warning" or "error", so its default is used.`,
+        `Environment "${name}": "color" should be green, blue, purple, yellow, orange or red, so its default is used.`,
       );
+    }
+    if (valid) {
+      uncoloured.delete(name);
+    } else {
+      uncoloured.add(name);
     }
     byName.set(name, {
       name,
       readOnly: typeof entry.readOnly === 'boolean' ? entry.readOnly : !local,
-      color:
-        typeof color === 'string' && color in COLORS
-          ? (color as EnvironmentColor)
-          : defaultColor(name),
+      color: valid ? (color as EnvironmentColor) : 'default',
       local,
     });
   }
 
   const local = byName.get(LOCAL_ENVIRONMENT) ?? localEnvironment();
   byName.delete(LOCAL_ENVIRONMENT);
-  return { environments: [local, ...byName.values()], problems, leaked };
-}
-
-/** `local` with its defaults: writable, default status bar */
-export function localEnvironment(): Environment {
-  return { name: LOCAL_ENVIRONMENT, readOnly: false, color: 'default', local: true };
-}
-
-/** The default status bar color: none for local, error for anything named like prod, else warning */
-export function defaultColor(name: string): EnvironmentColor {
-  if (name === LOCAL_ENVIRONMENT) {
-    return 'default';
+  const environments = [local, ...byName.values()];
+  // Explicit colours are taken first; each of the others gets a default no one has yet.
+  const used = environments
+    .filter((environment) => !uncoloured.has(environment.name))
+    .map((environment) => environmentHue(environment.color));
+  for (const environment of environments) {
+    if (uncoloured.has(environment.name)) {
+      environment.color = defaultColor(environment.name, used);
+      used.push(environmentHue(environment.color));
+    }
   }
-  return /prod|live/.test(name) ? 'error' : 'warning';
+  return { environments, problems, leaked };
+}
+
+/** `local` with its defaults: writable, green */
+export function localEnvironment(): Environment {
+  return { name: LOCAL_ENVIRONMENT, readOnly: false, color: 'green', local: true };
+}
+
+/**
+ * The colour an environment gets when the setting gives it none: green for local, red for
+ * anything named like prod, else the first of yellow, blue, purple and orange that no other
+ * environment has (`used`), so environments look different by default.
+ */
+export function defaultColor(name: string, used: readonly EnvironmentHue[] = []): EnvironmentHue {
+  if (name === LOCAL_ENVIRONMENT) {
+    return 'green';
+  }
+  if (/prod|live/.test(name)) {
+    return 'red';
+  }
+  return DEFAULT_HUES.find((hue) => !used.includes(hue)) ?? 'yellow';
+}
+
+/** The hue an environment is drawn in; the setting's first values stand for blue, yellow and red */
+/** True for a colour `mmk.environments` accepts: a hue, or `default`, `warning` or `error` */
+export function isEnvironmentColor(value: unknown): value is EnvironmentColor {
+  return typeof value === 'string' && COLORS.has(value);
+}
+
+export function environmentHue(color: EnvironmentColor): EnvironmentHue {
+  switch (color) {
+    case 'default':
+      return 'blue';
+    case 'warning':
+      return 'yellow';
+    case 'error':
+      return 'red';
+    default:
+      return color;
+  }
+}
+
+/**
+ * The status bar background while an environment is selected. VS Code allows only its warning
+ * and error backgrounds there: yellow and orange get the warning one, red the error one.
+ */
+export function statusBarBackground(color: EnvironmentColor): 'default' | 'warning' | 'error' {
+  switch (environmentHue(color)) {
+    case 'yellow':
+    case 'orange':
+      return 'warning';
+    case 'red':
+      return 'error';
+    default:
+      return 'default';
+  }
 }
 
 /** Check a new environment name; returns why it can't be used, or null */
@@ -215,7 +292,7 @@ export function connectionEnv(connection: Connection | null): Record<string, str
  * The mmk commands that never write to a database, so they may run on a read-only environment.
  * `create` only writes a file.
  */
-const NO_DATABASE_WRITES = new Set(['status', 'list', 'dry-run', 'config', 'create']);
+const NO_DATABASE_WRITES = new Set(['status', 'list', 'dry-run', 'lock', 'config', 'create']);
 
 /** True when `args` is an mmk command that never writes to a database */
 export function isReadCommand(args: readonly string[]): boolean {
@@ -228,7 +305,7 @@ export class ReadOnlyEnvironmentError extends Error {
 
   constructor(environment: string, args: readonly string[]) {
     super(
-      `${environment} is read-only, so mmk for VS Code won't run "mmk ${args[0] ?? ''}" there. It only runs status, list and dry-run on ${environment}; deploys go through CI. To allow runs, set "readOnly": false for ${environment} in "mmk.environments".`,
+      `${environment} is read-only, so the extension won't run "mmk ${args[0] ?? ''}" there. It only runs status, list and dry-run on ${environment}; deploys go through CI. To allow runs, set "readOnly": false for ${environment} in "mmk.environments".`,
     );
     this.name = 'ReadOnlyEnvironmentError';
     this.environment = environment;

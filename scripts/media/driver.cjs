@@ -30,13 +30,45 @@ const type = (text) => ask({ action: 'type', text });
 const press = (key) => ask({ action: 'key', key });
 
 /** The scenes to play (MEDIA_SCENES, comma-separated); all of them by default */
-const scenes = (process.env.MEDIA_SCENES || 'local-workflow,environments,applied-edit').split(',');
+const scenes = (
+  process.env.MEDIA_SCENES || 'local-workflow,environments,applied-edit,console'
+).split(',');
+
+/**
+ * Another run holding prod's migration lock, as a deploy on a CI runner would: the document mmk
+ * writes when it takes the lock, with that runner's host and user instead of this machine's.
+ */
+async function holdProdLock() {
+  const { MongoClient } = require('mongodb');
+  const client = await MongoClient.connect(process.env.MEDIA_MONGO_URI);
+  try {
+    const now = Date.now();
+    await client
+      .db('orders_prod')
+      .collection('_mmk_locks')
+      .replaceOne(
+        { _id: 'mmk_lock' },
+        {
+          lockedAt: new Date(now - 20_000),
+          acquiredAt: new Date(now - 4 * 60_000),
+          expiresAt: new Date(now + 40_000),
+          pid: 4127,
+          host: 'deploy-runner-7',
+          executedBy: 'ci',
+          owner: require('node:crypto').randomUUID(),
+        },
+        { upsert: true },
+      );
+  } finally {
+    await client.close();
+  }
+}
 
 async function run() {
   const workspace = vscode.workspace.workspaceFolders[0].uri.fsPath;
   const migrations = path.join(workspace, 'migrations');
   const file = (name) => vscode.Uri.file(path.join(migrations, name));
-  const api = await vscode.extensions.getExtension('guptasantosh327.mmk-vscode').activate();
+  const api = await vscode.extensions.getExtension('guptasantosh327.mongo-migrate-kit').activate();
   api.setConfirm(() => true);
   const settle = async (ms = 1200) => {
     await api.idle();
@@ -81,6 +113,7 @@ async function run() {
   if (scenes.includes('local-workflow')) await localWorkflow();
   if (scenes.includes('environments')) await environments();
   if (scenes.includes('applied-edit')) await appliedEdit();
+  if (scenes.includes('console')) await migrationConsole();
   await ask({ action: 'finish' });
 
   async function localWorkflow() {
@@ -137,10 +170,13 @@ async function run() {
     await settle();
     await frame('environments/2', 2600);
 
-    // ── C2: the matrix ─────────────────────────────────────────────────────────────────────
-    await exec('mmk.compareEnvironments', { dir: workspace });
+    // ── C2–C4: the console on what differs, then one migration on every environment ───────
+    const panel = await exec('mmk.compareEnvironments', { dir: workspace });
     await settle(2500);
-    await frame('environments/3', 3500);
+    await frame('environments/3', 3000);
+    await panel.receive({ type: 'pick', file: '20261012091500-backfill-order-status.js' });
+    await settle(1500);
+    await frame('environments/4', 3500);
     await exec('mmk.selectEnvironment', 'local');
     await closeAll();
     await clearNotifications();
@@ -170,6 +206,57 @@ async function run() {
     await exec('mmk.showAppliedVersion', file('20261012091500-backfill-order-status.js'));
     await sleep(2500);
     await frame('applied-edit/3', 4000);
+    await closeAll();
+    await clearNotifications();
+  }
+
+  async function migrationConsole() {
+    // ── The console on local: every migration on every environment, the first pending picked ─
+    const panel = await exec('mmk.openConsole', { dir: workspace });
+    await settle(2500);
+    await frame('console/1', 3500);
+
+    // ── Plan, apply while mmk's output comes in, the result ──────────────────────────────
+    await panel.receive({ type: 'plan' });
+    await settle(800);
+    await frame('console/2', 2800);
+    const applying = panel.receive({ type: 'applyPlan' });
+    for (let waited = 0; waited < 30_000; waited += 50) {
+      const run = panel.view().run;
+      if (run?.state === 'running' && run.lines.some((line) => line.includes('Applied'))) {
+        break;
+      }
+      await sleep(50);
+    }
+    // The webview draws the new line a moment after the view has it.
+    await sleep(150);
+    await frame('console/3', 2200);
+    const result = await applying;
+    await settle(800);
+    await frame('console/4', 3000);
+
+    // ── Roll that batch back from the result ─────────────────────────────────────────────
+    if (result?.rollBackBatch) {
+      await panel.receive({ type: 'rollBack', batch: result.rollBackBatch });
+      await settle(800);
+      await frame('console/5', 2800);
+    }
+
+    // ── prod: read-only, a deploy holding its lock, only what differs ────────────────────
+    await panel.receive({ type: 'closeDrawer' });
+    await holdProdLock();
+    await panel.receive({ type: 'environment', name: 'prod' });
+    await panel.receive({ type: 'filter', value: 'diff' });
+    await exec('mmk.refresh');
+    await settle(1500);
+    await frame('console/6', 3800);
+
+    // ── Editing an environment: the same form that adds one ──────────────────────────────
+    await panel.receive({ type: 'editEnvironment', name: 'staging' });
+    await settle(600);
+    await frame('console/7', 3000);
+    await panel.receive({ type: 'closeDialog' });
+    await exec('mmk.selectEnvironment', 'local');
     await closeAll();
     await clearNotifications();
   }

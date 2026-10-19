@@ -2,7 +2,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { type Deps, databaseLabel, relativeDir } from '../commands/context.js';
 import type { WireStatusRow } from '../mmk/contract.js';
-import type { Environment } from '../mmk/environments.js';
+import { type Environment, environmentHue } from '../mmk/environments.js';
+import { environmentLock } from '../mmk/lock-holder.js';
 import {
   type BatchGroup,
   type StatusModel,
@@ -43,7 +44,7 @@ export type SidebarNode =
   | { kind: 'migration'; dir: string; file: string; group: GroupKind }
   | { kind: 'action'; dir: string; action: 'upAll' | 'dryRun' };
 
-type Tone = 'loading' | 'error' | 'ok' | 'running' | 'locked' | 'setup';
+type Tone = 'loading' | 'error' | 'ok' | 'running' | 'locked' | 'held' | 'setup';
 
 /** The "mmk: Migrations" tree (design A2): environment, pending, edited, applied by batch */
 export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
@@ -135,6 +136,20 @@ export class SidebarProvider implements vscode.TreeDataProvider<SidebarNode> {
           'locked',
         ),
       );
+    }
+    const lock = environmentLock(project, name);
+    if (lock) {
+      // Another run holds the migration lock: clicking releases it on a writable environment
+      // (mmk.unlock asks first, naming the holder).
+      nodes.push({
+        kind: 'notice',
+        dir,
+        id: 'lock',
+        text: `Locked by ${lock.who} · ${lock.age}`,
+        tone: 'held',
+        detail: [lock.summary, lock.expires].filter(Boolean).join('. '),
+        ...(environment.readOnly ? {} : { command: 'mmk.unlock', args: [{ dir }] }),
+      });
     }
     if (project.running) {
       nodes.push(
@@ -274,15 +289,9 @@ function projectItem(dir: string, project: ProjectSnapshot | undefined): vscode.
   return item;
 }
 
-/** The theme color of an environment's dot: blue for the default, amber or red otherwise */
+/** The theme colour of an environment's dot: its own, from VS Code's chart colours */
 function environmentColor(environment: Environment): vscode.ThemeColor {
-  return new vscode.ThemeColor(
-    environment.color === 'error'
-      ? 'testing.iconFailed'
-      : environment.color === 'warning'
-        ? 'list.warningForeground'
-        : 'charts.blue',
-  );
+  return new vscode.ThemeColor(`charts.${environmentHue(environment.color)}`);
 }
 
 function envItem(project: ProjectSnapshot | undefined, environment: Environment): vscode.TreeItem {
@@ -312,6 +321,7 @@ function noticeItem(node: Extract<SidebarNode, { kind: 'notice' }>): vscode.Tree
     error: new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed')),
     ok: new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed')),
     locked: new vscode.ThemeIcon('lock'),
+    held: new vscode.ThemeIcon('watch', new vscode.ThemeColor('list.warningForeground')),
     setup: new vscode.ThemeIcon('key', new vscode.ThemeColor('list.warningForeground')),
   };
   item.iconPath = icons[node.tone];

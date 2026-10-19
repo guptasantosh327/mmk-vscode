@@ -2,6 +2,91 @@
 
 All notable changes to this extension are documented here.
 
+## 1.1.0 
+
+The first release as **Mongo Migrate Kit**: a migration console, an environments pipeline in the
+sidebar, and what mongo-migrate-kit 1.6.0 adds. It still works with mongo-migrate-kit 1.5.0.
+(1.0.1, the rename alone, was never published; it's part of this release.)
+
+### Renamed
+
+- **Mongo Migrate Kit**, the library's name, with a new extension ID:
+  `guptasantosh327.mongo-migrate-kit`. It replaces `guptasantosh327.mmk-vscode` ("mmk for VS
+  Code"), which is no longer updated: uninstall it and install this one. Settings (`mmk.*`) and
+  commands are unchanged; environments' connection strings need adding again, since the keychain
+  keeps them per extension.
+- The README opens like mongo-migrate-kit's: the logo, badges and links to its docs.
+
+### Added
+
+- **Migration console** (`mmk: Open migration console`): every migration against every
+  environment in one editor tab, with environment tabs, filters (*Pending*, *Needs attention*,
+  *Only differences*), files from your branch or `origin/main`, the picked migration's record on
+  each environment with the actions the selected one allows, its CLI command, and the latest
+  batches. It replaces the environments matrix; *Compare all environments* opens it on *Only
+  differences*. Its buttons run the same commands as the rest of the extension, so read-only
+  environments and confirmations work the same way.
+- **Plan, run and result in the console:** *Plan* shows mmk's dry run (what up would apply, in
+  order) and *Apply* runs it. While mmk runs in the project, its own output shows as it comes. The
+  result lists each migration, mmk's error as is when it stops, where the environment stands now,
+  and the next step (open the file, roll back the batch, release a held lock). It stays on screen,
+  finished or failed, until you close it.
+- **Roll back a batch** (`mmk: Roll back a batch…`, `mmk down --batch N`): the confirmation names
+  every migration in the batch. Refused on read-only environments.
+- **Environments pipeline** at the top of the mmk sidebar: each environment as a step with its
+  pending count, the latest migration applied there and what needs attention, then *Review N
+  pending*, *Console* and *New migration*, then the selected environment's pending migrations.
+- **Environment colours:** each environment has its own colour in the sidebar, the console and the
+  status bar, and a different one by default (local green, prod red, the others yellow, blue,
+  purple and orange in turn). *mmk: Change environment colour…* sets it, local's too, in
+  `mmk.environments` (`green`, `blue`, `purple`, `yellow`, `orange`, `red`; `default`, `warning`
+  and `error` still work). Yellow and orange give the status bar its warning background, red its
+  error one.
+- An environment that can't be read shows mmk's message as is, with *Try again*, *Edit
+  connection* and *Show output*.
+- **Add environment is one form** in the console (`mmk: Add environment…`, the `+` next to its
+  tabs, or the sidebar): name, database, the connection string (masked, with a show button),
+  read-only (on by default) and a colour. *Test connection* asks mmk (`mmk status`) and says what
+  it read, or shows mmk's error with *Add anyway*. Add tests it first unless it just passed. The
+  connection string goes to the keychain only; it's never sent back to the form.
+- **Edit and remove environments in the same form**: *Edit…* on the console's environment line,
+  the gear on a sidebar card, the tree's environment row or `mmk: Edit environment…`. The
+  connection string field starts empty and keeps the stored one unless you type a new one (which
+  is tested first); *Remove* asks first; allowing runs asks first. `local` has only its colour.
+- **Dismiss** next to *Review it* on the console's "edited after it ran" notice: it stays hidden
+  until that migration runs again. The console's notices now show together instead of taking
+  turns.
+
+### With mongo-migrate-kit 1.6.0
+
+On by themselves once a project has mongo-migrate-kit 1.6.0 or later:
+
+- **The warning while you edit a migration that already ran**, and **Show applied version**:
+  mmk 1.6 reports the checksum each migration ran with.
+- **Database users with only the `read` role** for staging and prod: mmk 1.6 reads without
+  writing.
+- The project's settings come from `mmk config --json`, so its migrations show even before it has
+  a connection string.
+- When a run stops partway, the console's result lists what ran before it from mmk's own error.
+- **Who holds the migration lock** (`mmk lock`): when another run holds an environment's lock, the
+  line under the console's tabs says "Locked by ci on deploy-runner-7 · 4 min"; a click shows the
+  process, since when and when the lock frees itself if that run crashed. The environment's card in
+  the sidebar, its tab, the tree and the status bar show it too, and runs stay greyed out until it
+  lets go (*Plan* still works). *Release…* asks first, and only writable environments offer it. A
+  lock mmk reports stale isn't shown: the next run takes it over.
+
+### Changed
+
+- Runs no longer pop up a notification when they succeed (up, down, redo, *Apply all*, rolling
+  back a batch), and their progress shows in the status bar: the sidebar, run links and status bar
+  already show the result. A failure still shows mmk's message, and a run that did nothing says
+  why.
+
+### Fixed
+
+- *Edit environment → Make read-only* (or *Allow runs*) no longer drops the environment's colour
+  from settings.
+
 ## 1.0.0 · 2026-10-18
 
 The first release. (0.1.0 was prepared as a pre-release and never published.) It needs

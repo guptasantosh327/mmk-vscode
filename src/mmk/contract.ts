@@ -1,7 +1,8 @@
 import type {
+  ConfigSummary,
   LockInfo,
+  LockStatus,
   MigrationExtension,
-  MmkConfig,
   MmkErrorCode,
   RunResult,
   RunResultStatus,
@@ -21,12 +22,10 @@ export type Wire<T> = T extends Date
       : T;
 
 /**
- * A row of `status`, `list` or `dry-run` as it arrives. mongo-migrate-kit after 1.5 adds
- * `checksum` to `StatusRow` (request R5): the SHA-256 recorded when the file was applied. Until
- * that release is pinned, the field is added here so the code compiles against both; once it
- * is, this is plain `WireStatusRow`.
+ * A row of `status`, `list` or `dry-run` as it arrives. `checksum` (request R5) comes from
+ * mongo-migrate-kit 1.6; a 1.5 row never has it.
  */
-export type WireStatusRow = Wire<StatusRow & { checksum?: string }>;
+export type WireStatusRow = Wire<StatusRow>;
 
 /**
  * An error code from mmk. A newer mmk may return a code this extension doesn't know yet, so any
@@ -61,6 +60,12 @@ export interface UnlockResult {
   /** The holder that was released, or null */
   holder: Wire<LockInfo> | null;
 }
+
+/**
+ * `mmk lock --json` (request R11, mongo-migrate-kit 1.6): who holds the migration lock, and
+ * whether mmk judges it stale (the holder stopped renewing it, so the next run takes it over).
+ */
+export type WireLockStatus = Wire<LockStatus>;
 
 /** Thrown when mmk's JSON doesn't have a field the extension reads, or it has the wrong type */
 export class ContractError extends Error {
@@ -116,25 +121,34 @@ export function parseUnlockResult(value: unknown): UnlockResult {
   return { released: result.released, holder };
 }
 
-/**
- * The resolved config values the extension reads. mongo-migrate-kit 1.5 exports no type for
- * them (a later release adds `ConfigSummary` with `mmk config --json`, request R2), so this is
- * declared here, taking each mirrored field's type from `MmkConfig`. It is the subset of R2's
- * `ConfigSummary` the extension needs, and both ways of reading config produce it.
- */
-export interface ProjectConfig {
-  /** Absolute path of the migrations folder, resolved the way every mmk command resolves it */
-  migrationsDir: string;
-  fileExtensions: MmkConfig['fileExtensions'];
-  createExtension: MmkConfig['createExtension'];
-  sequential: MmkConfig['sequential'];
-  /** Absent for the default namespace */
-  namespace?: string;
-  /** The database name; null when none is set */
-  dbName: string | null;
-  /** The connection string with its credentials hidden; null when none is set */
-  uri: string | null;
+/** Parse the output of `mmk lock --json` */
+export function parseLockStatus(value: unknown): WireLockStatus {
+  const result = checkFields<{ holder: unknown; stale: boolean }>('lock', 'the output', value, {
+    holder: required(() => true, 'an object or null'),
+    stale: required(isBoolean, 'true or false'),
+  });
+  const holder =
+    result.holder === null
+      ? null
+      : checkFields<Wire<LockInfo>>('lock', 'holder', result.holder, LOCK_INFO_RULES);
+  return { holder, stale: result.stale };
 }
+
+/**
+ * The resolved config values the extension reads: the part of `ConfigSummary` (`mmk config
+ * --json`, request R2, mongo-migrate-kit 1.6) that both ways of reading config produce. On 1.5,
+ * the config bridge (`src/mmk/project-config.ts`) prints the same fields.
+ */
+export type ProjectConfig = Pick<
+  ConfigSummary,
+  | 'migrationsDir'
+  | 'fileExtensions'
+  | 'createExtension'
+  | 'sequential'
+  | 'namespace'
+  | 'dbName'
+  | 'uri'
+>;
 
 /**
  * Parse the resolved config, from `mmk config --json` or from the library bridge (same shape).
@@ -243,7 +257,7 @@ const STATUS_ROW_RULES = {
   namespace: optional(isString, 'a string'),
   fileMissing: optional(isBoolean, 'true or false'),
   unadopted: optional(isBoolean, 'true or false'),
-} satisfies Record<keyof StatusRow | 'checksum', FieldRule>;
+} satisfies Record<keyof StatusRow, FieldRule>;
 
 const RUN_RESULT_RULES = {
   file: required(isString, 'a string'),

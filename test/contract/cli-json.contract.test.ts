@@ -4,7 +4,7 @@ import { hostname, userInfo } from 'node:os';
 import path from 'node:path';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MmkCommandError, runMmkVersion } from '../../src/mmk/cli.js';
+import { MmkCommandError, isUnknownCommand, runMmkVersion } from '../../src/mmk/cli.js';
 import {
   MIN_MMK_VERSION,
   checkCompat,
@@ -13,9 +13,11 @@ import {
 } from '../../src/mmk/compat.js';
 import {
   parseCreateResult,
+  parseLockStatus,
   parseRunResults,
   parseStatusRows,
   parseUnlockResult,
+  runResultsOfFailure,
 } from '../../src/mmk/contract.js';
 import {
   type ContractProject,
@@ -148,7 +150,7 @@ describe('status, list, dry-run, up, down, redo and create', () => {
   it('status: an applied row has its batch, time, duration, checksum verdict and author', async () => {
     const before = Date.now();
     const rows = parseStatusRows((await project().run(['status'])).value, 'status');
-    // R5 (the next mmk): the checksum recorded when it ran, the SHA-256 of the file's text.
+    // R5 (mmk 1.6): the checksum recorded when it ran, the SHA-256 of the file's text.
     const source = readFileSync(path.join(project().migrationsDir, CREATE_USERS), 'utf8');
     const recorded = hasNextMmk()
       ? { checksum: createHash('sha256').update(source).digest('hex') }
@@ -370,6 +372,125 @@ describe('error document', () => {
       direction: 'up',
       cause: 'boom from up',
     });
+  });
+});
+
+describe('down --batch, for rolling back a batch (Phase 7)', () => {
+  const project = withProject('contract_down_batch');
+
+  it('down --batch <n>: reverts every file of that batch, newest first, and only those', async () => {
+    await project().run(['up', CREATE_USERS]);
+    await project().run(['up']);
+
+    const output = await project().run(['down', '--batch', '2']);
+
+    expect(parseRunResults(output.value, 'down')).toEqual([
+      { file: BACKFILL, status: 'reverted', duration: expect.any(Number) },
+      { file: ADD_EMAIL_INDEX, status: 'reverted', duration: expect.any(Number) },
+    ]);
+    const rows = parseStatusRows((await project().run(['status'])).value, 'status');
+    expect(rows.map((row) => [row.file, row.status, row.batch])).toEqual([
+      [CREATE_USERS, 'applied', 1],
+      [ADD_EMAIL_INDEX, 'pending', null],
+      [BACKFILL, 'pending', null],
+    ]);
+  });
+
+  it("down --batch <n>: mmk's own error for a batch that isn't there", async () => {
+    const error = await expectFailure(project().run(['down', '--batch', '9']));
+
+    expect(error.failure.code).toBe('INVALID_ARGUMENT');
+    expect(error.failure.message).toMatch(/No applied migrations found in batch 9/);
+  });
+});
+
+describe('lock, for showing who holds the migration lock (R11)', () => {
+  const project = withProject('contract_lock');
+
+  it.runIf(hasNextMmk())(
+    'lock --json: no holder when nothing runs, and changes nothing',
+    async () => {
+      expect(parseLockStatus((await project().run(['lock'])).value)).toEqual({
+        holder: null,
+        stale: false,
+      });
+    },
+  );
+
+  it.runIf(hasNextMmk())(
+    'lock --json: the holder while a run is in progress',
+    async () => {
+      project().addMigration(
+        '20991231000000-slow.js',
+        `module.exports = {
+  async up() {
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+  },
+  async down() {},
+};
+`,
+      );
+      const running = project().run(['up', '20991231000000-slow.js']);
+      let status = parseLockStatus((await project().run(['lock'])).value);
+      for (let tries = 0; status.holder === null && tries < 40; tries += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        status = parseLockStatus((await project().run(['lock'])).value);
+      }
+
+      expect(status.stale).toBe(false);
+      expect(status.holder).toEqual({
+        lockedAt: expect.any(String),
+        pid: expect.any(Number),
+        host: hostname(),
+        executedBy: userInfo().username,
+        acquiredAt: expect.any(String),
+        expiresAt: expect.any(String),
+      });
+      await running;
+      expect(parseLockStatus((await project().run(['lock'])).value).holder).toBeNull();
+    },
+    30_000,
+  );
+
+  it.runIf(!hasNextMmk())('1.5: has no lock command, which the store recognizes', async () => {
+    const error = await project()
+      .run(['lock'])
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+
+    expect(isUnknownCommand(error, 'lock')).toBe(true);
+  });
+});
+
+describe('a run that stops partway, for the console result (R10)', () => {
+  const project = withProject('contract_partial_run');
+
+  it('lists the files that ran first in details.results, the failed one last (none on 1.5)', async () => {
+    project().addMigration(
+      '20991231000000-throws.js',
+      `module.exports = {
+  async up() {
+    throw new Error('boom after the others');
+  },
+  async down() {},
+};
+`,
+    );
+
+    const error = await expectFailure(project().run(['up']));
+
+    expect(error.failure.code).toBe('MIGRATION_EXECUTION_FAILED');
+    const results = runResultsOfFailure(error.failure);
+    if (hasNextMmk()) {
+      expect(results?.map((result) => [result.file, result.status])).toEqual([
+        ...FIXTURE_FILES.map((file) => [file, 'applied']),
+        ['20991231000000-throws.js', 'error'],
+      ]);
+    } else {
+      expect(results).toBeNull();
+    }
   });
 });
 

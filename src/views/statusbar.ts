@@ -1,10 +1,12 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { type Deps, databaseLabel, relativeDir } from '../commands/context.js';
+import { statusBarBackground } from '../mmk/environments.js';
+import { environmentLock } from '../mmk/lock-holder.js';
 
 /**
  * `mmk: local · 3 pending` in the status bar; a click opens the environment picker. Its
- * background follows the environment: default, warning (staging) or error (prod).
+ * background follows the environment's colour: warning for yellow and orange, error for red.
  */
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -38,6 +40,9 @@ export class StatusBar implements vscode.Disposable {
       0,
     );
     const unread = ready.filter((project) => !project.rows);
+    const locks = ready
+      .map((project) => environmentLock(project, environment.name))
+      .filter((lock) => lock !== null);
     const notSetUp = ready.every(
       (project) => project.environments[environment.name]?.connected === false,
     );
@@ -52,18 +57,17 @@ export class StatusBar implements vscode.Disposable {
       this.item.text = `$(sync~spin) mmk: ${name}`;
     } else if (unread.length === ready.length) {
       this.item.text = `$(warning) mmk: ${name} · can't read status`;
+    } else if (locks.length > 0) {
+      this.item.text = `$(watch) mmk: ${name} · locked · ${pending === 0 ? 'up to date' : `${pending} pending`}`;
     } else {
       this.item.text = `$(layers) mmk: ${name} · ${pending === 0 ? 'up to date' : `${pending} pending`}`;
     }
 
+    const background = statusBarBackground(environment.color);
     this.item.backgroundColor =
-      environment.color === 'default'
+      background === 'default'
         ? undefined
-        : new vscode.ThemeColor(
-            environment.color === 'error'
-              ? 'statusBarItem.errorBackground'
-              : 'statusBarItem.warningBackground',
-          );
+        : new vscode.ThemeColor(`statusBarItem.${background}Background`);
 
     const lines = projects.map((project) => {
       const label = relativeDir(project.dir) || path.basename(project.dir);
@@ -81,8 +85,9 @@ export class StatusBar implements vscode.Disposable {
     const note = environment.readOnly
       ? [`${environment.name} is read-only: only status, list and dry-run run there.`]
       : [];
+    const held = locks.map((lock) => [lock.summary, lock.expires].filter(Boolean).join('. '));
     this.item.tooltip = new vscode.MarkdownString(
-      [...lines, ...note, '', 'Click to switch environments or compare them'].join('  \n'),
+      [...lines, ...note, ...held, '', 'Click to switch environments or compare them'].join('  \n'),
     );
     this.item.show();
   }

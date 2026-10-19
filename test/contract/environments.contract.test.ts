@@ -16,7 +16,7 @@ import { FIXTURE_FILES, FIXTURE_WORKSPACE, REPO_ROOT, hasNextMmk } from './harne
 /**
  * Environments through the extension's own store and the real, pinned mmk: a stored
  * connection is injected as MMK_URI / MMK_DB and wins over the config file and `.env`; a
- * read-only MongoDB user can read (request R3, the next mmk); and read-only environments never
+ * read-only MongoDB user can read (request R3, mmk 1.6); and read-only environments never
  * get a write command, whatever asks for one.
  */
 
@@ -181,6 +181,7 @@ describe('a read-only MongoDB user', () => {
     const staging = store.snapshot(dir)?.environments.staging;
 
     expect(staging?.error).toBeNull();
+    expect(staging?.lock).toEqual({ holder: null, stale: false });
     expect(staging?.rows?.map((row) => [row.file, row.status])).toEqual([
       [FIXTURE_FILES[0], 'applied'],
       [FIXTURE_FILES[1], 'pending'],
@@ -198,6 +199,7 @@ describe('a read-only MongoDB user', () => {
       const staging = store.snapshot(dir)?.environments.staging;
 
       expect(staging?.rows).toBeNull();
+      expect(staging?.lock).toBeNull();
       expect(staging?.error?.code).toBe('CONNECTION_FAILED');
       expect(staging?.error?.message).toContain('not authorized');
       expect(staging?.error?.message).not.toContain(READER.password);
